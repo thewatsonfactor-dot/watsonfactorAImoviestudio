@@ -7,8 +7,9 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 PY="$REPO/backend/.venv/bin/python"
 [ -x "$PY" ] || { echo "Run scripts/install-studio.sh first."; exit 1; }
 
-cd "$REPO/backend"
-"$PY" - <<'EOF'
+# The Python goes in a temp file, not stdin, so input() can read your answers.
+TMP="$(mktemp -t wfmodels).py"; trap 'rm -f "$TMP"' EXIT
+cat > "$TMP" <<'EOF'
 import shutil, sys
 from pathlib import Path
 from huggingface_hub import hf_hub_download
@@ -35,3 +36,4 @@ for m in todo:
     shutil.move(got, dest); shutil.rmtree(staging, ignore_errors=True)
     print(f"  ✓ saved to {dest}")
 EOF
+cd "$REPO/backend" && PYTHONPATH="$REPO/backend" "$PY" "$TMP"
