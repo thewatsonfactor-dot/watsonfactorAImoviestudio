@@ -10,13 +10,14 @@ PIDFILE="$LOGS/comfyui.pid"
 
 if [ ! -x "$PY" ]; then echo "Studio backend not installed — run scripts/install-studio.sh"; exit 1; fi
 eval "$(cd "$REPO/backend" && "$PY" -m wfstudio.envdump)"
+. "$REPO/launch/ssd.sh"
 PORT="${WF_COMFY_URL##*:}"; PORT="${PORT%%/*}"
 
 listening() { /usr/bin/curl -s -m 2 -o /dev/null "$WF_COMFY_URL/system_stats"; }
 
 start() {
   if listening; then echo "Engine already running on $WF_COMFY_URL"; return 0; fi
-  if [ ! -d "$WF_SSD_ROOT" ]; then echo "SSD not mounted at $WF_SSD_ROOT"; return 1; fi
+  ssd_ensure || return 1
   if [ ! -x "$WF_COMFY_DIR/venv/bin/python" ]; then echo "ComfyUI not installed at $WF_COMFY_DIR — run scripts/install-engine.sh"; return 1; fi
   mkdir -p "$WF_OUTPUT_DIR"
   echo "Starting engine: $WF_COMFY_DIR (port $PORT, output $WF_OUTPUT_DIR)"

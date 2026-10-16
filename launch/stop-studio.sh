@@ -13,3 +13,11 @@ else
 fi
 rm -f "$STUDIO_PID"
 "$REPO/launch/engine.sh" stop
+
+# Detach the WFStudio disk image, but only if the Studio attached it.
+PY="$REPO/backend/.venv/bin/python"
+if [ -x "$PY" ]; then
+  eval "$(cd "$REPO/backend" && "$PY" -m wfstudio.envdump)"
+  . "$REPO/launch/ssd.sh"
+  ssd_release
+fi

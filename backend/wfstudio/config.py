@@ -31,7 +31,7 @@ ENV_OVERRIDES = {
 }
 
 EDITABLE = {
-    "ssd_root", "models_dir", "output_dir", "inputs_dir", "comfy_url",
+    "ssd_root", "ssd_image", "models_dir", "output_dir", "inputs_dir", "comfy_url",
     "comfy_dir", "default_project", "default_preset", "default_length", "min_free_gb",
 }
 
@@ -60,6 +60,7 @@ def settings() -> dict[str, Any]:
     s = raw_settings()
     root = os.path.expanduser(s["ssd_root"])
     s["ssd_root"] = root
+    s["ssd_image"] = os.path.expanduser(str(s.get("ssd_image") or ""))
     for key in ("models_dir", "output_dir", "inputs_dir", "comfy_dir"):
         s[key] = os.path.expanduser(str(s[key]).replace("{ssd_root}", root))
     s["comfy_url"] = s["comfy_url"].rstrip("/")

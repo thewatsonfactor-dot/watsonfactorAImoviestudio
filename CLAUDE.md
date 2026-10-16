@@ -8,7 +8,8 @@ Full design: `docs/SPEC.md`. Plain-English usage: `docs/HOW-TO-USE.md`.
 - **Backend** `backend/wfstudio/` — FastAPI on 127.0.0.1:8420. Owns the render queue, hands ComfyUI one job at a time, relays live progress, writes the mp4 + thumbnail + JSON sidecar to `Studio_Output/<project>/`.
 - **Dashboard** `frontend/` — React + Vite + Tailwind v4. Create, Renders, Library, Models, Settings. Brand tokens and fonts are copied from thewatsonfactor.dev.
 - **Workflow** `studio/templates/wan22_i2v.api.json` + `.map.json` — Wan 2.2 I2V 14B, GGUF loaders, Lightx2v 4-step LoRAs on both passes, 2-pass KSamplerAdvanced, CreateVideo → SaveVideo mp4. Written against ComfyUI 0.41 + ComfyUI-GGUF node definitions. **Not yet run on real hardware.**
-- **Launch** `launch/` — `engine.sh`, `start-studio.sh`, `stop-studio.sh`, `make-app.sh` (Dock apps with the WF icon).
+- **Launch** `launch/` — `engine.sh`, `start-studio.sh`, `stop-studio.sh`, `make-app.sh` (Dock apps with the WF icon), `ssd.sh` (optional disk-image mount helper).
+- **SSD as a disk image:** if the `ssd_image` setting points at a sparsebundle, the launchers run `hdiutil attach -nobrowse` when `ssd_root` isn't mounted, and Stop AI Studio detaches it afterwards, but only if the Studio attached it (marker `logs/ssd-attached-by-studio`). If the drive holding the image is missing, the "SSD not connected" dialog names that drive. Daniel's: `/Volumes/WATSON-DEV/WFStudio.sparsebundle` in `settings.local.json`.
 - **Install** `scripts/install-engine.sh` (Phase 0, gated), `scripts/install-studio.sh`, `scripts/download-models.sh`.
 
 ## What's left — do this on the Mac, in order, stop at any failed gate

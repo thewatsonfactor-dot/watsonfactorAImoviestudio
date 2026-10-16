@@ -1,5 +1,6 @@
 {
   "ssd_root": "/Volumes/WFStudio",
+  "ssd_image": "",
   "models_dir": "{ssd_root}/ComfyUI_Models",
   "output_dir": "{ssd_root}/Studio_Output",
   "inputs_dir": "{ssd_root}/Studio_Inputs",

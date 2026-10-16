@@ -17,11 +17,12 @@ notify() {
 
 if [ ! -x "$PY" ]; then dialog "The Studio isn't installed yet. In Terminal, run: $REPO/scripts/install-studio.sh"; exit 1; fi
 eval "$(cd "$REPO/backend" && "$PY" -m wfstudio.envdump)"
+. "$REPO/launch/ssd.sh"
 STUDIO_URL="http://127.0.0.1:$WF_STUDIO_PORT"
 
-# 1. SSD
-if [ ! -d "$WF_SSD_ROOT" ]; then
-  dialog "SSD not connected. Plug in $(basename "$WF_SSD_ROOT") and open the Studio again."
+# 1. SSD (attaches the disk image first if one is configured)
+if ! MSG="$(ssd_ensure)"; then
+  dialog "$MSG"
   exit 1
 fi
 

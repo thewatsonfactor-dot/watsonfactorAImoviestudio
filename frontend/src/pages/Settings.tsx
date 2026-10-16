@@ -6,6 +6,7 @@ import { Section } from "../components/ui";
 
 const FIELDS: { key: string; label: string; hint: string }[] = [
   { key: "ssd_root", label: "SSD", hint: "Where the external drive mounts. Default /Volumes/WFStudio." },
+  { key: "ssd_image", label: "SSD disk image (optional)", hint: "If the SSD is a disk image, its path. The Studio mounts it for you and detaches it on Stop." },
   { key: "models_dir", label: "Models folder", hint: "{ssd_root} is replaced with the SSD path." },
   { key: "output_dir", label: "Output folder", hint: "Every render lands here, one folder per project." },
   { key: "inputs_dir", label: "Keyframes folder", hint: "Uploaded keyframes are copied here." },
