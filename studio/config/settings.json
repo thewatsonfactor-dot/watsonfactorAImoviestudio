@@ -1,0 +1,15 @@
+{
+  "ssd_root": "/Volumes/WFStudio",
+  "models_dir": "{ssd_root}/ComfyUI_Models",
+  "output_dir": "{ssd_root}/Studio_Output",
+  "inputs_dir": "{ssd_root}/Studio_Inputs",
+  "comfy_url": "http://127.0.0.1:8188",
+  "comfy_dir": "~/ComfyUI",
+  "studio_host": "127.0.0.1",
+  "studio_port": 8420,
+  "workflow": "wan22_i2v",
+  "default_project": "Unsorted",
+  "default_preset": "standard",
+  "default_length": "standard",
+  "min_free_gb": 20
+}

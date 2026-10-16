@@ -1,0 +1,31 @@
+{
+  "fps": 16,
+  "token_limit": 512,
+  "token_warn": 400,
+  "lengths": {
+    "short":    { "label": "Short",    "frames": 49, "approx": "~3s" },
+    "standard": { "label": "Standard", "frames": 81, "approx": "~5s" }
+  },
+  "tiers": {
+    "480": { "landscape": [832, 480], "portrait": [480, 832], "square": [640, 640] },
+    "720": { "landscape": [1280, 720], "portrait": [720, 1280], "square": [960, 960] }
+  },
+  "presets": {
+    "draft": {
+      "label": "Draft", "note": "Blocking and motion tests",
+      "tier": "480", "steps": 4, "split": 2, "cfg": 1.0, "shift": 5.0,
+      "experimental": false
+    },
+    "standard": {
+      "label": "Standard", "note": "Default — best speed/quality on this Mac",
+      "tier": "480", "steps": 4, "split": 2, "cfg": 1.0, "shift": 5.0,
+      "experimental": false
+    },
+    "final": {
+      "label": "Final", "note": "720p — memory-heavy on 36 GB, may fail or swap",
+      "tier": "720", "steps": 6, "split": 3, "cfg": 1.0, "shift": 5.0,
+      "experimental": true
+    }
+  },
+  "negative_default": "blurry, low quality, distorted face, extra limbs, warped hands, flicker, jpeg artifacts, watermark, text, subtitles, static frame"
+}

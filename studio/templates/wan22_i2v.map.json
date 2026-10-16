@@ -1,0 +1,161 @@
+{
+  "_doc": "Friendly parameter -> list of [node_id, input_name] targets in wan22_i2v.api.json. Model filenames are injected from models.manifest.json by id. Re-map node ids here if you re-export the workflow from ComfyUI.",
+  "params": {
+    "image": [
+      [
+        "1",
+        "image"
+      ]
+    ],
+    "positive": [
+      [
+        "10",
+        "text"
+      ]
+    ],
+    "negative": [
+      [
+        "11",
+        "text"
+      ]
+    ],
+    "width": [
+      [
+        "12",
+        "width"
+      ]
+    ],
+    "height": [
+      [
+        "12",
+        "height"
+      ]
+    ],
+    "length": [
+      [
+        "12",
+        "length"
+      ]
+    ],
+    "seed": [
+      [
+        "13",
+        "noise_seed"
+      ],
+      [
+        "14",
+        "noise_seed"
+      ]
+    ],
+    "steps": [
+      [
+        "13",
+        "steps"
+      ],
+      [
+        "14",
+        "steps"
+      ]
+    ],
+    "split": [
+      [
+        "13",
+        "end_at_step"
+      ],
+      [
+        "14",
+        "start_at_step"
+      ]
+    ],
+    "cfg": [
+      [
+        "13",
+        "cfg"
+      ],
+      [
+        "14",
+        "cfg"
+      ]
+    ],
+    "shift": [
+      [
+        "8",
+        "shift"
+      ],
+      [
+        "9",
+        "shift"
+      ]
+    ],
+    "fps": [
+      [
+        "16",
+        "fps"
+      ]
+    ],
+    "filename_prefix": [
+      [
+        "17",
+        "filename_prefix"
+      ]
+    ]
+  },
+  "models": {
+    "unet_high": [
+      [
+        "2",
+        "unet_name"
+      ]
+    ],
+    "unet_low": [
+      [
+        "3",
+        "unet_name"
+      ]
+    ],
+    "text_encoder": [
+      [
+        "4",
+        "clip_name"
+      ]
+    ],
+    "vae": [
+      [
+        "5",
+        "vae_name"
+      ]
+    ],
+    "lora_high": [
+      [
+        "6",
+        "lora_name"
+      ]
+    ],
+    "lora_low": [
+      [
+        "7",
+        "lora_name"
+      ]
+    ]
+  },
+  "stages": {
+    "1": "load",
+    "2": "load",
+    "3": "load",
+    "4": "load",
+    "5": "load",
+    "6": "load",
+    "7": "load",
+    "8": "load",
+    "9": "load",
+    "10": "prompt",
+    "11": "prompt",
+    "12": "encode",
+    "13": "sample_1",
+    "14": "sample_2",
+    "15": "decode",
+    "16": "save",
+    "17": "save"
+  },
+  "output_node": "17"
+}

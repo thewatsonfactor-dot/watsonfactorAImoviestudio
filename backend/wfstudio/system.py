@@ -1,0 +1,99 @@
+"""macOS helpers: memory pressure, disk space, Finder, Trash, system info.
+Everything degrades gracefully on non-Mac machines (used for testing)."""
+from __future__ import annotations
+
+import os
+import platform
+import shutil
+import subprocess
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+import psutil
+
+IS_MAC = platform.system() == "Darwin"
+
+
+def _sysctl(key: str) -> str | None:
+    try:
+        return subprocess.run(["sysctl", "-n", key], capture_output=True, text=True,
+                              timeout=2).stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def memory() -> dict[str, Any]:
+    vm = psutil.virtual_memory()
+    level = "normal"
+    if IS_MAC:
+        # kern.memorystatus_vm_pressure_level: 1 normal, 2 warning, 4 critical
+        raw = _sysctl("kern.memorystatus_vm_pressure_level")
+        level = {"1": "normal", "2": "warning", "4": "critical"}.get(raw or "", "normal")
+    else:
+        level = "critical" if vm.percent > 95 else "warning" if vm.percent > 85 else "normal"
+    return {"level": level, "used_percent": vm.percent,
+            "total_gb": round(vm.total / 1e9, 1), "available_gb": round(vm.available / 1e9, 1)}
+
+
+def disk(path: str) -> dict[str, Any] | None:
+    try:
+        u = shutil.disk_usage(path)
+    except OSError:
+        return None
+    return {"total_gb": round(u.total / 1e9, 1), "free_gb": round(u.free / 1e9, 1),
+            "used_gb": round(u.used / 1e9, 1)}
+
+
+def ssd_state(root: str) -> dict[str, Any]:
+    p = Path(root)
+    mounted = p.exists() and (os.path.ismount(root) or not root.startswith("/Volumes/"))
+    writable = mounted and os.access(root, os.W_OK)
+    return {"path": root, "mounted": mounted, "writable": writable,
+            "disk": disk(root) if mounted else None}
+
+
+@lru_cache(maxsize=1)
+def info() -> dict[str, Any]:
+    chip = _sysctl("machdep.cpu.brand_string") if IS_MAC else platform.processor()
+    mem = _sysctl("hw.memsize") if IS_MAC else None
+    mac_ver = platform.mac_ver()[0] if IS_MAC else None
+    return {
+        "chip": chip or platform.machine(),
+        "memory_gb": round(int(mem) / 2**30) if mem else round(psutil.virtual_memory().total / 2**30),
+        "os": f"macOS {mac_ver}" if mac_ver else f"{platform.system()} {platform.release()}",
+        "python": platform.python_version(),
+    }
+
+
+def reveal(path: str) -> bool:
+    if not IS_MAC or not Path(path).exists():
+        return False
+    subprocess.Popen(["open", "-R", path])
+    return True
+
+
+def trash(path: str) -> None:
+    from send2trash import send2trash
+    if Path(path).exists():
+        send2trash(path)
+
+
+def ffmpeg() -> str | None:
+    for candidate in (shutil.which("ffmpeg"), "/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"):
+        if candidate and Path(candidate).exists():
+            return candidate
+    return None
+
+
+def make_thumbnail(video: Path, out: Path) -> bool:
+    exe = ffmpeg()
+    if not exe:
+        return False
+    try:
+        subprocess.run([exe, "-y", "-loglevel", "error", "-i", str(video),
+                        "-vf", "thumbnail,scale=640:-2", "-frames:v", "1", str(out)],
+                       timeout=60, check=True)
+        return out.exists()
+    except (OSError, subprocess.SubprocessError):
+        return False

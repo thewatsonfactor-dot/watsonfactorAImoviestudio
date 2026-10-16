@@ -1,0 +1,266 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Keyframe"
+    },
+    "inputs": {
+      "image": "keyframe.png"
+    }
+  },
+  "2": {
+    "class_type": "UnetLoaderGGUF",
+    "_meta": {
+      "title": "Wan 2.2 high-noise"
+    },
+    "inputs": {
+      "unet_name": "Wan2.2-I2V-A14B-HighNoise-Q4_K_M.gguf"
+    }
+  },
+  "3": {
+    "class_type": "UnetLoaderGGUF",
+    "_meta": {
+      "title": "Wan 2.2 low-noise"
+    },
+    "inputs": {
+      "unet_name": "Wan2.2-I2V-A14B-LowNoise-Q4_K_M.gguf"
+    }
+  },
+  "4": {
+    "class_type": "CLIPLoaderGGUF",
+    "_meta": {
+      "title": "UMT5 text encoder"
+    },
+    "inputs": {
+      "clip_name": "umt5-xxl-encoder-Q8_0.gguf",
+      "type": "wan"
+    }
+  },
+  "5": {
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Wan VAE"
+    },
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    }
+  },
+  "6": {
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Lightx2v high"
+    },
+    "inputs": {
+      "model": [
+        "2",
+        0
+      ],
+      "lora_name": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+      "strength_model": 1.0
+    }
+  },
+  "7": {
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Lightx2v low"
+    },
+    "inputs": {
+      "model": [
+        "3",
+        0
+      ],
+      "lora_name": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+      "strength_model": 1.0
+    }
+  },
+  "8": {
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "Shift high"
+    },
+    "inputs": {
+      "model": [
+        "6",
+        0
+      ],
+      "shift": 5.0
+    }
+  },
+  "9": {
+    "class_type": "ModelSamplingSD3",
+    "_meta": {
+      "title": "Shift low"
+    },
+    "inputs": {
+      "model": [
+        "7",
+        0
+      ],
+      "shift": 5.0
+    }
+  },
+  "10": {
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Motion prompt"
+    },
+    "inputs": {
+      "clip": [
+        "4",
+        0
+      ],
+      "text": "slow push in"
+    }
+  },
+  "11": {
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Negative prompt"
+    },
+    "inputs": {
+      "clip": [
+        "4",
+        0
+      ],
+      "text": "blurry"
+    }
+  },
+  "12": {
+    "class_type": "WanImageToVideo",
+    "_meta": {
+      "title": "Image to video"
+    },
+    "inputs": {
+      "positive": [
+        "10",
+        0
+      ],
+      "negative": [
+        "11",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ],
+      "start_image": [
+        "1",
+        0
+      ],
+      "width": 832,
+      "height": 480,
+      "length": 81,
+      "batch_size": 1
+    }
+  },
+  "13": {
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "Sampler pass 1 (high-noise)"
+    },
+    "inputs": {
+      "model": [
+        "8",
+        0
+      ],
+      "add_noise": "enable",
+      "noise_seed": 1,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "positive": [
+        "12",
+        0
+      ],
+      "negative": [
+        "12",
+        1
+      ],
+      "latent_image": [
+        "12",
+        2
+      ],
+      "start_at_step": 0,
+      "end_at_step": 2,
+      "return_with_leftover_noise": "enable"
+    }
+  },
+  "14": {
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "Sampler pass 2 (low-noise)"
+    },
+    "inputs": {
+      "model": [
+        "9",
+        0
+      ],
+      "add_noise": "disable",
+      "noise_seed": 1,
+      "steps": 4,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "positive": [
+        "12",
+        0
+      ],
+      "negative": [
+        "12",
+        1
+      ],
+      "latent_image": [
+        "13",
+        0
+      ],
+      "start_at_step": 2,
+      "end_at_step": 10000,
+      "return_with_leftover_noise": "disable"
+    }
+  },
+  "15": {
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Decode"
+    },
+    "inputs": {
+      "samples": [
+        "14",
+        0
+      ],
+      "vae": [
+        "5",
+        0
+      ]
+    }
+  },
+  "16": {
+    "class_type": "CreateVideo",
+    "_meta": {
+      "title": "Frames to video"
+    },
+    "inputs": {
+      "images": [
+        "15",
+        0
+      ],
+      "fps": 16.0
+    }
+  },
+  "17": {
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Save mp4"
+    },
+    "inputs": {
+      "video": [
+        "16",
+        0
+      ],
+      "filename_prefix": "wfstudio/test",
+      "format": "mp4",
+      "format.codec": "h264"
+    }
+  }
+}

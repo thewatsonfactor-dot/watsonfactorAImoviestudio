@@ -1,0 +1,21 @@
+# Runtime
+data/
+logs/
+studio.db
+studio/config/settings.local.json
+
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+
+# Dashboard
+frontend/node_modules/
+frontend/dist/
+
+# Built apps + icon preview (make-app.sh output)
+launch/*.app/
+launch/icon-preview-32.png
+
+.DS_Store
+frontend/*.tsbuildinfo
