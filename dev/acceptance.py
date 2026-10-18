@@ -17,6 +17,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--studio", default="http://127.0.0.1:8420")
 ap.add_argument("--keyframe", default=str(Path(__file__).resolve().parents[1] / "frontend/public/brand/wf-mark-tight.png"))
 ap.add_argument("--only", default=None)
+ap.add_argument("--timeout", type=float, default=120, help="seconds to wait per render (use ~1500 on the real engine)")
 args = ap.parse_args()
 c = httpx.Client(base_url=args.studio, timeout=30)
 results = []
@@ -40,7 +41,8 @@ def job(prompt, **kw):
     return r.json()
 
 
-def wait(jid, states=("done", "failed", "cancelled"), timeout=120, until=None):
+def wait(jid, states=("done", "failed", "cancelled"), timeout=None, until=None):
+    timeout = timeout or args.timeout
     t0 = time.time()
     while time.time() - t0 < timeout:
         j = c.get(f"/api/jobs/{jid}").json()
