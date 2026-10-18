@@ -206,8 +206,16 @@ def _build_job(j: JobIn) -> dict[str, Any]:
     }
 
 
+def _require_ssd() -> None:
+    """Server-side half of the pre-flight: the dashboard already disables Generate, this stops scripts too."""
+    root = config.settings()["ssd_root"]
+    if not system.ssd_state(root)["mounted"]:
+        raise HTTPException(409, f"SSD not connected — plug in {Path(root).name}.")
+
+
 @app.post("/api/jobs")
 def create_job(j: JobIn) -> dict[str, Any]:
+    _require_ssd()
     return engine_runner.view(engine_runner.enqueue(_build_job(j)))  # type: ignore[return-value]
 
 
@@ -294,6 +302,7 @@ def tag(job_id: str, body: TagsIn) -> dict[str, Any]:
 
 @app.post("/api/library/{job_id}/reroll")
 def reroll(job_id: str) -> dict[str, Any]:
+    _require_ssd()
     j = db.get_job(job_id)
     if not j:
         raise HTTPException(404)
