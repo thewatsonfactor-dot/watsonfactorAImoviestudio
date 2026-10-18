@@ -31,7 +31,7 @@ ENV_OVERRIDES = {
 }
 
 EDITABLE = {
-    "ssd_root", "ssd_image", "models_dir", "output_dir", "inputs_dir", "comfy_url",
+    "ssd_root", "ssd_image", "engine_flags", "quants", "models_dir", "output_dir", "inputs_dir", "comfy_url",
     "comfy_dir", "default_project", "default_preset", "default_length", "min_free_gb",
 }
 
@@ -61,6 +61,7 @@ def settings() -> dict[str, Any]:
     root = os.path.expanduser(s["ssd_root"])
     s["ssd_root"] = root
     s["ssd_image"] = os.path.expanduser(str(s.get("ssd_image") or ""))
+    s["engine_flags"] = str(s.get("engine_flags") or "")
     for key in ("models_dir", "output_dir", "inputs_dir", "comfy_dir"):
         s[key] = os.path.expanduser(str(s[key]).replace("{ssd_root}", root))
     s["comfy_url"] = s["comfy_url"].rstrip("/")
@@ -81,7 +82,15 @@ def presets() -> dict[str, Any]:
 
 
 def manifest() -> list[dict[str, Any]]:
-    return _read(CONFIG_DIR / "models.manifest.json")["models"]
+    """The model list, with each model resolved to the quantization chosen in the
+    `quants` setting ({model id: quant}). Unknown or unset choices use the model's own default."""
+    chosen = raw_settings().get("quants") or {}
+    out = []
+    for m in _read(CONFIG_DIR / "models.manifest.json")["models"]:
+        want = chosen.get(m["id"])
+        variant = next((v for v in m.get("variants", []) if v["quant"] == want), None)
+        out.append({**m, **variant} if variant else dict(m))
+    return out
 
 
 def ensure_dirs() -> None:

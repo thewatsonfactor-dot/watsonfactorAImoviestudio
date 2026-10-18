@@ -26,6 +26,7 @@ start() {
     --listen 127.0.0.1 --port "$PORT" \
     --enable-manager \
     --output-directory "$WF_OUTPUT_DIR" \
+    $WF_ENGINE_FLAGS \
     >> "$LOGS/comfyui.log" 2>&1 &
   echo $! > "$PIDFILE"
 }

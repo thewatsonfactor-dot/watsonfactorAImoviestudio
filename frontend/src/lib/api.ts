@@ -54,7 +54,7 @@ export interface ModelsStatus { models: ModelItem[]; present: number; total: num
 
 export interface Upload { path: string; width: number; height: number; orientation: string; url: string }
 
-export type Settings = Record<string, string | number>;
+export type Settings = Record<string, string | number | boolean>;
 
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   const init: RequestInit = { method, headers: {} };
@@ -83,6 +83,7 @@ export const api = {
   settings: () => req<{ settings: Settings; editable: string[] }>("GET", "/api/settings"),
   saveSettings: (s: Settings) => req<{ settings: Settings }>("PUT", "/api/settings", s),
   engine: (action: "start" | "stop" | "restart") => req<{ ok: boolean }>("POST", `/api/engine/${action}`),
+  freeMemory: () => req<{ swap_released_mb: number | null; after: { swap_used_mb: number | null; level: string } }>("POST", "/api/engine/free"),
   models: () => req<ModelsStatus>("GET", "/api/models"),
   download: (id: string) => req<unknown>("POST", `/api/models/${id}/download`),
   upload: (file: File) => { const f = new FormData(); f.append("file", file); return req<Upload>("POST", "/api/upload", f); },

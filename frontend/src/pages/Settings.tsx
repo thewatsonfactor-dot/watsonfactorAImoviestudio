@@ -7,6 +7,7 @@ import { Section } from "../components/ui";
 const FIELDS: { key: string; label: string; hint: string }[] = [
   { key: "ssd_root", label: "SSD", hint: "Where the external drive mounts. Default /Volumes/WFStudio." },
   { key: "ssd_image", label: "SSD disk image (optional)", hint: "If the SSD is a disk image, its path. The Studio mounts it for you and detaches it on Stop." },
+  { key: "engine_flags", label: "Engine flags (optional)", hint: "Extra ComfyUI flags, e.g. --disable-smart-memory. Restart the engine to apply." },
   { key: "models_dir", label: "Models folder", hint: "{ssd_root} is replaced with the SSD path." },
   { key: "output_dir", label: "Output folder", hint: "Every render lands here, one folder per project." },
   { key: "inputs_dir", label: "Keyframes folder", hint: "Uploaded keyframes are copied here." },
@@ -33,6 +34,14 @@ export default function Settings() {
   const engine = async (a: "start" | "restart" | "stop") => {
     try { await api.engine(a); toast(a === "stop" ? "Stopping the engine…" : `${a === "start" ? "Starting" : "Restarting"} the engine — about 20 seconds.`, "info"); setTimeout(refreshHealth, 3000); }
     catch (e) { toast((e as Error).message, "error"); }
+  };
+
+  const freeNow = async () => {
+    try {
+      const r = await api.freeMemory();
+      toast(r.swap_released_mb == null ? "Asked the engine to free memory." : `Freed memory. Swap down ${Math.round(r.swap_released_mb)} MB.`, "info");
+      refreshHealth();
+    } catch (e) { toast((e as Error).message, "error"); }
   };
 
   return (
@@ -84,6 +93,8 @@ export default function Settings() {
                 : <button className="btn btn-primary flex-1" onClick={() => engine("start")}><Power size={15} />Start engine</button>}
               {health?.engine.up && <button className="btn btn-ghost" onClick={() => engine("stop")}>Stop</button>}
             </div>
+            <button className="btn btn-secondary" disabled={!health?.engine.up} onClick={freeNow}><RefreshCw size={15} />Free memory now</button>
+            <p className="text-[12px] text-muted">Unloads the models and releases cached memory. Handy when the Mac feels sluggish. The next render reloads the models (about a minute).</p>
             <p className="text-[12px] text-muted">Restart clears memory if renders start failing. A render in progress is lost.</p>
           </div>
         </Section>

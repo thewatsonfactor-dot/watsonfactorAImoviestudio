@@ -454,5 +454,34 @@ class Runner:
             dest.write_bytes(r.content)
 
 
+async def free_engine_memory(settle_seconds: float = 20.0) -> dict[str, Any]:
+    """POST /free, then watch swap until it stops falling (or settle_seconds pass).
+
+    A 200 from the engine only means the request was accepted, so the result carries
+    memory/swap before and after, and `swap_released_mb` says whether swap really dropped."""
+    before = system.mem_snapshot()
+    await comfy.free()
+    after = before
+    low = before["swap_used_mb"]
+    deadline = time.monotonic() + settle_seconds
+    stable = 0
+    while time.monotonic() < deadline:
+        await asyncio.sleep(2)
+        after = system.mem_snapshot()
+        cur, prev = after["swap_used_mb"], low
+        if cur is not None and prev is not None and cur < prev - 5:
+            low, stable = cur, 0
+        else:
+            stable += 1
+            if stable >= 2:
+                break
+    released = None
+    if before["swap_used_mb"] is not None and after["swap_used_mb"] is not None:
+        released = round(before["swap_used_mb"] - after["swap_used_mb"], 1)
+    result = {"before": before, "after": after, "swap_released_mb": released}
+    log.info("free memory: %s", result)
+    return result
+
+
 def new_seed() -> int:
     return random.randint(0, 2**32 - 1)

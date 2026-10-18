@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import shutil
 import subprocess
 from functools import lru_cache
@@ -34,6 +35,23 @@ def memory() -> dict[str, Any]:
         level = "critical" if vm.percent > 95 else "warning" if vm.percent > 85 else "normal"
     return {"level": level, "used_percent": vm.percent,
             "total_gb": round(vm.total / 1e9, 1), "available_gb": round(vm.available / 1e9, 1)}
+
+
+def swap_used_mb() -> float | None:
+    """Swap in use, in MB (macOS vm.swapusage; psutil elsewhere)."""
+    if IS_MAC:
+        m = re.search(r"used = ([\d.]+)M", _sysctl("vm.swapusage") or "")
+        if m:
+            return float(m.group(1))
+    try:
+        return round(psutil.swap_memory().used / 2**20, 1)
+    except OSError:
+        return None
+
+
+def mem_snapshot() -> dict[str, Any]:
+    m = memory()
+    return {"level": m["level"], "available_gb": m["available_gb"], "swap_used_mb": swap_used_mb()}
 
 
 def disk(path: str) -> dict[str, Any] | None:

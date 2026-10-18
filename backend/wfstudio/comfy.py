@@ -84,6 +84,14 @@ async def delete_from_queue(prompt_id: str) -> None:
         await c.post("/queue", json={"delete": [prompt_id]})
 
 
+async def free(unload_models: bool = True, free_memory: bool = True) -> None:
+    """Ask the engine to unload models and release cached memory. Returns when the
+    engine has accepted the request; it acts on it when its queue loop next wakes."""
+    async with _client(10.0) as c:
+        r = await c.post("/free", json={"unload_models": unload_models, "free_memory": free_memory})
+        r.raise_for_status()
+
+
 async def history(prompt_id: str) -> dict[str, Any] | None:
     try:
         async with _client(10.0) as c:

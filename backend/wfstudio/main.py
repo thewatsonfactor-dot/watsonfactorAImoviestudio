@@ -47,6 +47,15 @@ async def get_health() -> dict[str, Any]:
     return h
 
 
+@app.post("/api/engine/free")
+async def engine_free() -> dict[str, Any]:
+    """Free the engine's memory now. Returns swap/memory before and after."""
+    try:
+        return await runner.free_engine_memory()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Couldn't reach the engine: {e}")
+
+
 @app.post("/api/engine/{action}")
 async def engine(action: str) -> dict[str, Any]:
     if action not in ("start", "stop", "restart"):

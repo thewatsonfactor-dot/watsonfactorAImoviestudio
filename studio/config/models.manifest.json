@@ -1,40 +1,85 @@
 {
-  "note": "Sizes and paths verified on Hugging Face Oct 16 2026. No fp8 files — MPS cannot load Float8.",
+  "note": "Sizes and paths verified on Hugging Face Oct 16 2026. No fp8 files \u2014 MPS cannot load Float8. Models with 'variants' can run at another quantization: set \"quants\": {\"<id>\": \"<quant>\"} in settings.local.json (default is each model's own 'quant').",
   "models": [
     {
-      "id": "unet_high", "label": "Wan 2.2 I2V 14B — high-noise (Q4_K_M)",
-      "folder": "diffusion_models", "filename": "Wan2.2-I2V-A14B-HighNoise-Q4_K_M.gguf",
-      "repo": "QuantStack/Wan2.2-I2V-A14B-GGUF", "repo_path": "HighNoise/Wan2.2-I2V-A14B-HighNoise-Q4_K_M.gguf",
-      "size_bytes": 9651728896
+      "id": "unet_high",
+      "label": "Wan 2.2 I2V 14B \u2014 high-noise (Q4_K_M)",
+      "folder": "diffusion_models",
+      "filename": "Wan2.2-I2V-A14B-HighNoise-Q4_K_M.gguf",
+      "repo": "QuantStack/Wan2.2-I2V-A14B-GGUF",
+      "repo_path": "HighNoise/Wan2.2-I2V-A14B-HighNoise-Q4_K_M.gguf",
+      "size_bytes": 9651728896,
+      "quant": "Q4_K_M",
+      "variants": [
+        {
+          "quant": "Q3_K_M",
+          "filename": "Wan2.2-I2V-A14B-HighNoise-Q3_K_M.gguf",
+          "repo_path": "HighNoise/Wan2.2-I2V-A14B-HighNoise-Q3_K_M.gguf",
+          "size_bytes": 7176106496
+        }
+      ]
     },
     {
-      "id": "unet_low", "label": "Wan 2.2 I2V 14B — low-noise (Q4_K_M)",
-      "folder": "diffusion_models", "filename": "Wan2.2-I2V-A14B-LowNoise-Q4_K_M.gguf",
-      "repo": "QuantStack/Wan2.2-I2V-A14B-GGUF", "repo_path": "LowNoise/Wan2.2-I2V-A14B-LowNoise-Q4_K_M.gguf",
-      "size_bytes": 9651728896
+      "id": "unet_low",
+      "label": "Wan 2.2 I2V 14B \u2014 low-noise (Q4_K_M)",
+      "folder": "diffusion_models",
+      "filename": "Wan2.2-I2V-A14B-LowNoise-Q4_K_M.gguf",
+      "repo": "QuantStack/Wan2.2-I2V-A14B-GGUF",
+      "repo_path": "LowNoise/Wan2.2-I2V-A14B-LowNoise-Q4_K_M.gguf",
+      "size_bytes": 9651728896,
+      "quant": "Q4_K_M",
+      "variants": [
+        {
+          "quant": "Q3_K_M",
+          "filename": "Wan2.2-I2V-A14B-LowNoise-Q3_K_M.gguf",
+          "repo_path": "LowNoise/Wan2.2-I2V-A14B-LowNoise-Q3_K_M.gguf",
+          "size_bytes": 7176106496
+        }
+      ]
     },
     {
-      "id": "text_encoder", "label": "UMT5-XXL text encoder (GGUF Q8_0)",
-      "folder": "text_encoders", "filename": "umt5-xxl-encoder-Q8_0.gguf",
-      "repo": "city96/umt5-xxl-encoder-gguf", "repo_path": "umt5-xxl-encoder-Q8_0.gguf",
-      "size_bytes": 6043068256
+      "id": "text_encoder",
+      "label": "UMT5-XXL text encoder (GGUF Q8_0)",
+      "folder": "text_encoders",
+      "filename": "umt5-xxl-encoder-Q8_0.gguf",
+      "repo": "city96/umt5-xxl-encoder-gguf",
+      "repo_path": "umt5-xxl-encoder-Q8_0.gguf",
+      "size_bytes": 6043068256,
+      "quant": "Q8_0",
+      "variants": [
+        {
+          "quant": "Q4_K_M",
+          "filename": "umt5-xxl-encoder-Q4_K_M.gguf",
+          "repo_path": "umt5-xxl-encoder-Q4_K_M.gguf",
+          "size_bytes": 3655145312
+        }
+      ]
     },
     {
-      "id": "vae", "label": "Wan 2.1 VAE",
-      "folder": "vae", "filename": "wan_2.1_vae.safetensors",
-      "repo": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged", "repo_path": "split_files/vae/wan_2.1_vae.safetensors",
+      "id": "vae",
+      "label": "Wan 2.1 VAE",
+      "folder": "vae",
+      "filename": "wan_2.1_vae.safetensors",
+      "repo": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+      "repo_path": "split_files/vae/wan_2.1_vae.safetensors",
       "size_bytes": 253815318
     },
     {
-      "id": "lora_high", "label": "Lightx2v 4-step speed LoRA — high-noise",
-      "folder": "loras", "filename": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
-      "repo": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged", "repo_path": "split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+      "id": "lora_high",
+      "label": "Lightx2v 4-step speed LoRA \u2014 high-noise",
+      "folder": "loras",
+      "filename": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+      "repo": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+      "repo_path": "split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
       "size_bytes": 1226977424
     },
     {
-      "id": "lora_low", "label": "Lightx2v 4-step speed LoRA — low-noise",
-      "folder": "loras", "filename": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
-      "repo": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged", "repo_path": "split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+      "id": "lora_low",
+      "label": "Lightx2v 4-step speed LoRA \u2014 low-noise",
+      "folder": "loras",
+      "filename": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+      "repo": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
+      "repo_path": "split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
       "size_bytes": 1226977424
     }
   ]
