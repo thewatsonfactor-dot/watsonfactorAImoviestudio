@@ -20,7 +20,10 @@ def limits() -> dict[str, int | None]:
     prof = config.presets().get("memory_profile") or {}
     hist = db.token_history()
     proven = max(filter(None, [prof.get("proven_ok_tokens"), hist["proven"]]), default=None)
-    failed = min(filter(None, [prof.get("failed_tokens"), hist["failed"]]), default=None)
+    # A failure at a size that has also rendered fine is bad luck (other apps, a flaky run), not the
+    # memory limit: only failures bigger than the largest success can block a size.
+    fails = [t for t in [prof.get("failed_tokens"), *hist["failed"]] if t and (not proven or t > proven)]
+    failed = min(fails, default=None)
     return {"proven": proven, "failed": failed}
 
 

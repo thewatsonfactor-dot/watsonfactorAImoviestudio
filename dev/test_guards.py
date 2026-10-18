@@ -5,6 +5,7 @@
 1. Engine-log guard, against the real logs/comfyui.log: every past successful render must come out
    clean, and the Oct 17 Final (720p) render that produced a blank video must be flagged.
 2. Video guard, against short synthetic clips made with ffmpeg: flat colours flagged, real picture passes.
+3. Memory forecast: a one-off failure can't block a size that has rendered fine.
 """
 import re
 import subprocess
@@ -77,6 +78,21 @@ else:
         check("clip with real picture content passes", guards.video_problems(real, ff) is None)
         check("smooth gradient (sky-like) passes", guards.video_problems(sky, ff) is None)
         check("no ffmpeg means 'can't check', not a failure", guards.video_problems(real, None) is None)
+
+# ---- 3. memory forecast: one failure must not block a size that has rendered fine
+print("memory forecast")
+from wfstudio import db as _db, forecast  # noqa: E402
+real = _db.token_history
+try:
+    _db.token_history = lambda: {"proven": 20800, "failed": [20800, 90000]}
+    lim = forecast.limits()
+    check("a failure at a size that also rendered fine is ignored", lim["failed"] != 20800, str(lim))
+    check("Draft size (832x480x49) is not blocked by it", forecast.forecast(832, 480, 49)["level"] == "ok")
+    check("the real 720p limit still blocks Final", forecast.forecast(1280, 720, 81)["level"] == "failed")
+    _db.token_history = lambda: {"proven": None, "failed": []}
+    check("with no history, the seeded profile still applies", forecast.forecast(1280, 720, 81)["level"] == "failed")
+finally:
+    _db.token_history = real
 
 failed = results.count(False)
 print(f"\n{len(results) - failed}/{len(results)} passed")

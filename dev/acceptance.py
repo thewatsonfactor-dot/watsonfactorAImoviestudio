@@ -109,7 +109,18 @@ def t_fail():
     check("raw detail kept", "MPS backend out of memory" in (j.get("error_detail") or ""))
 
 
-tests = {"render": None, "cancel": t_cancel, "queue": t_queue, "fail": t_fail}
+def t_blank():
+    print("silent failure → marked failed, kept out of the Library (needs mock started with --blank)")
+    j = wait(job("blank please")["id"])
+    check("blank render is marked failed, not done", j["status"] == "failed", j.get("error") or "")
+    check("plain-English blank-video message", "blank" in (j.get("error") or "").lower())
+    detail = json.loads(j.get("error_detail") or "{}")
+    kept = detail.get("saved_for_inspection")
+    check("file moved to .failed/ for inspection", bool(kept) and "/.failed/" in kept and Path(kept).exists(), kept or "")
+    check("nothing left in the project folder", not j.get("output_path"))
+
+
+tests = {"render": None, "cancel": t_cancel, "queue": t_queue, "fail": t_fail, "blank": t_blank}
 if args.only:
     tests[args.only]() if args.only != "render" else t_reroll(t_render())
 else:

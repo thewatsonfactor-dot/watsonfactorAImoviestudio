@@ -4,7 +4,9 @@ It speaks the same HTTP + websocket API the Studio uses, walks the submitted
 workflow node by node with realistic progress events, and "renders" a slow
 push-in on the keyframe with ffmpeg so the Library has a real mp4.
 
-    WFSTUDIO_SSD_ROOT=/tmp/fake-ssd python dev/mock_comfy.py --port 8188 [--speed 0.2] [--fail-at 14]
+    WFSTUDIO_SSD_ROOT=/tmp/fake-ssd python dev/mock_comfy.py --port 8188 [--speed 0.2] [--fail-at 14] [--blank]
+
+--blank imitates a silent GPU out-of-memory: the run reports success but the mp4 is flat gray.
 """
 from __future__ import annotations
 
@@ -26,6 +28,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--port", type=int, default=8188)
 ap.add_argument("--speed", type=float, default=0.25, help="seconds per sampling step")
 ap.add_argument("--fail-at", default=None, help="node id that raises an OOM error")
+ap.add_argument("--blank", action="store_true", help="report success but write a flat gray video")
 args, _ = ap.parse_known_args()
 
 SSD = Path(os.environ.get("WFSTUDIO_SSD_ROOT", "/tmp/fake-ssd"))
@@ -103,6 +106,10 @@ async def send(client_id: str, type_: str, data: dict) -> None:
 
 def render(img: Path, out: Path, w: int, h: int, frames: int, fps: float) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
+    if args.blank:
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", f"color=c=gray:s={w}x{h}:r={fps}",
+                        "-frames:v", str(frames), "-pix_fmt", "yuv420p", "-c:v", "libx264", str(out)], check=True)
+        return
     vf = (f"scale={w*2}:{h*2}:force_original_aspect_ratio=increase,crop={w*2}:{h*2},"
           f"zoompan=z='min(zoom+0.0025,1.25)':d={frames}:s={w}x{h}:fps={fps}")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(img), "-vf", vf, "-frames:v",
