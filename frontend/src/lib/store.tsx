@@ -77,10 +77,17 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     let ws: WebSocket | null = null;
     let stop = false;
     let retry: ReturnType<typeof setTimeout>;
+    // Back off while the Studio is down (1.5 s doubling to 30 s) instead of retrying every 1.5 s forever.
+    let delay = 1500;
     const connect = () => {
       ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/ws`);
-      ws.onopen = () => { setConnected(true); refreshJobs(); };
-      ws.onclose = () => { setConnected(false); if (!stop) retry = setTimeout(connect, 1500); };
+      ws.onopen = () => { delay = 1500; setConnected(true); refreshJobs(); };
+      ws.onclose = () => {
+        setConnected(false);
+        if (stop) return;
+        retry = setTimeout(connect, delay);
+        delay = Math.min(delay * 2, 30000);
+      };
       ws.onmessage = ev => {
         const msg = JSON.parse(ev.data);
         if (msg.type === "job" && msg.job) {
