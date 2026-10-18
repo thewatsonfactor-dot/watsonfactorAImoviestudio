@@ -21,9 +21,10 @@ from typing import Any
 import httpx
 import websockets
 
-from . import comfy, config, db, health, system, workflow
+from . import comfy, config, db, guards, health, system, workflow
 
 log = logging.getLogger("wfstudio.runner")
+ENGINE_LOG = config.LOG_DIR / "comfyui.log"  # where launch/engine.sh sends the engine's output
 
 STAGE_LABELS = {
     "queued": "Waiting in line",
@@ -91,6 +92,7 @@ class Runner:
         self.last_event_at = 0.0
         self.blocked_reason: str | None = None
         self._outputs: dict[str, list[dict[str, Any]]] = {}
+        self._log_start: dict[str, int | None] = {}  # engine-log offset when each job was submitted
         self._node_stage: dict[str, str] = {}
         self._tasks: list[asyncio.Task] = []
         self._wake = asyncio.Event()
@@ -232,6 +234,7 @@ class Runner:
             }
             prompt = workflow.build(s["workflow"], params)
             self._node_stage = workflow.stage_map(s["workflow"])
+            log_start = guards.log_size(ENGINE_LOG)
             prompt_id = await comfy.queue_prompt(prompt, self.client_id)
         except comfy.EngineError as e:
             self._fail(job, str(e), json.dumps(e.detail)[:4000] if e.detail else None)
@@ -240,6 +243,7 @@ class Runner:
             self._fail(job, f"Couldn't reach the engine: {e}", None)
             return
         self._outputs.pop(prompt_id, None)
+        self._log_start[job["id"]] = log_start
         job = db.update_job(job["id"], prompt_id=prompt_id)  # type: ignore[assignment]
         self.last_event_at = time.time()
         self._set_live(job, "load")
@@ -379,6 +383,7 @@ class Runner:
 
     # ---------- finishing ----------
     def _fail(self, job: dict[str, Any], message: str, detail: str | None) -> None:
+        self._log_start.pop(job["id"], None)
         cur = db.get_job(job["id"])
         if cur and cur["status"] in ("cancelled", "done"):
             return
@@ -409,6 +414,16 @@ class Runner:
         except Exception as e:  # noqa: BLE001
             self._fail(cur, f"Render finished but the file couldn't be saved to the SSD: {e}", None)
             return
+        # Never trust "success" alone: the engine can hide a GPU out-of-memory and hand back a blank video.
+        gpu = guards.engine_log_problems(ENGINE_LOG, self._log_start.pop(cur["id"], None))
+        blank = None if gpu else await asyncio.to_thread(guards.video_problems, dest, system.ffmpeg())
+        if gpu or blank:
+            kept = await asyncio.to_thread(self._quarantine, dest)
+            detail = json.dumps({"check": "engine log" if gpu else "blank video", **(gpu or blank),
+                                 "saved_for_inspection": str(kept) if kept else None})
+            log.warning("job %s rejected: %s", cur["id"], detail)
+            self._fail(cur, guards.GPU_ERROR_MESSAGE if gpu else guards.BLANK_MESSAGE, detail)
+            return
         thumb = dest.with_suffix(".jpg")
         has_thumb = await asyncio.to_thread(system.make_thumbnail, dest, thumb)
         render_seconds = finished - (cur["started_at"] or finished)
@@ -433,6 +448,18 @@ class Runner:
         self.emit_job(done)
         self.hub.publish({"type": "library_changed"})
         self.wake()
+
+    @staticmethod
+    def _quarantine(dest: Path) -> Path | None:
+        """Move a rejected render out of the project folder so it can't pass for real output."""
+        qdir = Path(config.settings()["output_dir"]) / ".failed"
+        try:
+            qdir.mkdir(parents=True, exist_ok=True)
+            target = qdir / dest.name
+            shutil.move(str(dest), str(target))
+            return target
+        except OSError:
+            return None
 
     async def _collect(self, video: dict[str, Any], dest: Path) -> None:
         """Move the engine's file into the project folder; download it if it lives elsewhere."""

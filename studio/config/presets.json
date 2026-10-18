@@ -22,7 +22,7 @@
       "experimental": false
     },
     "final": {
-      "label": "Final", "note": "720p — memory-heavy on 36 GB, may fail or swap",
+      "label": "Final", "note": "720p — ran out of GPU memory on this Mac in testing: it looked done but was blank. The Studio now marks that as failed. Use Draft or Standard.",
       "tier": "720", "steps": 6, "split": 3, "cfg": 1.0, "shift": 5.0,
       "experimental": true
     }
