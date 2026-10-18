@@ -52,3 +52,26 @@ cd ../frontend && npm ci && npm run dev     # http://127.0.0.1:5173 (proxies /ap
 | `models.py` | manifest check + one-at-a-time Hugging Face downloads |
 | `system.py` | macOS memory pressure, disk, Finder reveal, Trash, ffmpeg thumbnails |
 | `main.py` | HTTP API, media serving, `/api/ws`, serves `frontend/dist` |
+
+## Memory findings (Oct 17 2026, 36 GB M4 Max)
+Controlled test: same 832x480 keyframe, prompt and seed 12345 (warm run used 12346), Draft, 49 frames, 4 steps. Targets were pressure at most "warning", swap rise under 4 GB, render under 8 min. **Nothing met all three.** Baseline was a clean machine (no Resolve, no Chrome); baseline swap was 2-6 GB because macOS doesn't give swap back after a run.
+
+| Run | Change | Time | Pressure | Swap start to peak (rise) |
+|---|---|---|---|---|
+| Phase 1 | Q4 unets + Q8 encoder, other apps open | 712.8 s | critical | 22.4 GB used afterwards |
+| A cold | clean machine | 732.7 s | warning | 2.5 to 11.1 GB (+8.7) |
+| A warm | second render, no restart | 673.5 s | critical (1/335) | 6.2 to 12.9 GB (+6.7) |
+| B | A + `--disable-smart-memory` | 776.4 s | critical (2/386) | 2.2 to 11.0 GB (+8.8) |
+| B2 job 1 | free after render ON, two-job queue | 721.1 s | critical (2/358) | 3.6 to 13.1 GB (+9.5) |
+| B2 job 2 | same queue | 686.6 s | critical (3/340) | 4.6 to 14.7 GB (+10.1) |
+| C | A + Q4_K_M text encoder (3.66 GB) | 730.1 s | warning | 3.6 to 8.1 GB (+4.5) |
+| D | C + Q3_K_M high/low unets (7.18 GB each) | 680.8 s | warning | 3.0 to 7.4 GB (+4.4) |
+
+- **The Q8 text encoder is the biggest lever.** Swapping it for Q4_K_M cut the swap rise roughly in half and removed all critical samples. The Q3 video models then bought only about 50 s and 0.7 GB more.
+- **`--disable-smart-memory` did not help** (slightly worse). Keep `engine_flags` empty; the setting exists for experiments.
+- **`/free` works but doesn't fix it.** After a job it released 7.7 and 10.5 GB of swap, but each render still peaks at 13-15 GB inside the render. So "free after every render" was not built. Settings has a manual **Free memory now** button only.
+- **Render time is compute-bound.** Every config lands at 11-13 minutes for 49 frames; quantization changes memory, not speed.
+- **Same seed, same frames:** A cold and B produced identical frames. Q4 encoder changed the sun's edge pattern; the Q3 clip looked as clean as Q4. One keyframe only, so quality is a spot check, not a verdict.
+- **Not tested:** Standard (81 frames) and Final (720p). Expect both to be worse than these numbers.
+- **Quant selection:** `models.manifest.json` models can list `variants`; pick one with `"quants": {"<model id>": "<quant>"}` in `settings.local.json`. All files stay on the SSD. Daniel's current setting: Q4_K_M encoder, Q3_K_M unets.
+
