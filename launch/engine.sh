@@ -40,7 +40,12 @@ stop() {
   else
     # Engine started some other way (e.g. by hand): find it by port.
     PIDS="$(/usr/sbin/lsof -ti tcp:"$PORT" -sTCP:LISTEN 2>/dev/null)"
-    if [ -n "$PIDS" ]; then kill $PIDS; echo "Engine stopped."; else echo "Engine was not running."; fi
+    if [ -n "$PIDS" ]; then
+      kill $PIDS
+      for _ in $(seq 1 20); do /usr/sbin/lsof -ti tcp:"$PORT" -sTCP:LISTEN >/dev/null 2>&1 || break; sleep 0.5; done
+      kill -9 $PIDS 2>/dev/null
+      echo "Engine stopped."
+    else echo "Engine was not running."; fi
     rm -f "$PIDFILE"
   fi
 }
