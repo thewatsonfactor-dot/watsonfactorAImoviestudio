@@ -132,8 +132,10 @@ def next_queue_pos() -> float:
 def avg_render_seconds(preset: str, length: str, n: int = 5) -> float | None:
     with _lock:
         rows = conn().execute(
-            "SELECT render_seconds FROM jobs WHERE status IN ('done','deleted') AND preset=? AND length=? "
-            "AND render_seconds IS NOT NULL ORDER BY finished_at DESC LIMIT ?",
+            # Deleted renders still count (people delete good takes too), but never ones marked with an
+            # error: a render the engine botched must not teach the Studio that a setting is fast.
+            "SELECT render_seconds FROM jobs WHERE status IN ('done','deleted') AND error IS NULL "
+            "AND preset=? AND length=? AND render_seconds IS NOT NULL ORDER BY finished_at DESC LIMIT ?",
             (preset, length, n)).fetchall()
     vals = [r[0] for r in rows]
     return sum(vals) / len(vals) if vals else None
