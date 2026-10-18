@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 
-from . import config, db, health, models, runner, system, workflow
+from . import config, db, forecast, health, models, runner, system, workflow
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("wfstudio")
@@ -174,6 +174,7 @@ class JobIn(BaseModel):
     steps: int | None = None
     split: int | None = None
     parent_id: str | None = None
+    allow_risky: bool = False  # "Try anyway" on a size that ran out of memory before
 
 
 def _build_job(j: JobIn) -> dict[str, Any]:
@@ -213,10 +214,23 @@ def _require_ssd() -> None:
         raise HTTPException(409, f"SSD not connected — plug in {Path(root).name}.")
 
 
+def _require_fits(job: dict[str, Any], allow_risky: bool) -> None:
+    fc = forecast.forecast(job["width"], job["height"], job["frames"])
+    if fc["level"] == "failed" and not allow_risky:
+        raise HTTPException(409, fc["message"])
+
+
+@app.get("/api/forecast")
+def get_forecast(width: int, height: int, frames: int) -> dict[str, Any]:
+    return forecast.forecast(width, height, frames)
+
+
 @app.post("/api/jobs")
 def create_job(j: JobIn) -> dict[str, Any]:
     _require_ssd()
-    return engine_runner.view(engine_runner.enqueue(_build_job(j)))  # type: ignore[return-value]
+    job = _build_job(j)
+    _require_fits(job, j.allow_risky)
+    return engine_runner.view(engine_runner.enqueue(job))  # type: ignore[return-value]
 
 
 @app.get("/api/jobs")
@@ -310,6 +324,7 @@ def reroll(job_id: str) -> dict[str, Any]:
                                "frames", "steps", "split", "cfg", "shift", "input_path")}
     if not Path(clone["input_path"]).exists():
         raise HTTPException(400, "The original keyframe is no longer on the SSD.")
+    _require_fits(clone, allow_risky=False)
     clone.update(seed=runner.new_seed(), parent_id=j["id"], tags=[])
     return engine_runner.view(engine_runner.enqueue(clone))  # type: ignore[return-value]
 

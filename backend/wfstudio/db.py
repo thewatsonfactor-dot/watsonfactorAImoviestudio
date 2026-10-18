@@ -141,6 +141,18 @@ def avg_render_seconds(preset: str, length: str, n: int = 5) -> float | None:
     return sum(vals) / len(vals) if vals else None
 
 
+def token_history() -> dict[str, int | None]:
+    """Largest size (in latent tokens) that has rendered cleanly here, and smallest that ran out of memory."""
+    tok = "(width/16)*(height/16)*((frames-1)/4+1)"
+    with _lock:
+        c = conn()
+        proven = c.execute(f"SELECT MAX({tok}) FROM jobs WHERE status IN ('done','deleted') AND error IS NULL "
+                           "AND render_seconds IS NOT NULL AND width AND height AND frames").fetchone()[0]
+        failed = c.execute(f"SELECT MIN({tok}) FROM jobs WHERE error IS NOT NULL AND width AND height AND frames "
+                           "AND (LOWER(error) LIKE '%out of memory%' OR LOWER(error) LIKE '%blank%')").fetchone()[0]
+    return {"proven": proven, "failed": failed}
+
+
 def ensure_project(name: str) -> None:
     with _lock:
         conn().execute("INSERT OR IGNORE INTO projects VALUES (?, ?)", (name, time.time()))

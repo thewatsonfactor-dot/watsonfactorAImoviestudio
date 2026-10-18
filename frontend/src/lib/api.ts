@@ -43,6 +43,10 @@ export interface Presets {
   negative_default: string;
 }
 
+export interface Forecast {
+  level: "ok" | "untested" | "failed"; tokens: number; proven_tokens: number | null; failed_tokens: number | null; message: string;
+}
+
 export interface Project { name: string; created_at: number; renders: number }
 
 export interface ModelItem {
@@ -79,6 +83,7 @@ export const api = {
   health: () => req<Health>("GET", "/api/health"),
   presets: () => req<Presets>("GET", "/api/presets"),
   projects: () => req<Project[]>("GET", "/api/projects"),
+  forecast: (w: number, h: number, frames: number) => req<Forecast>("GET", `/api/forecast?width=${w}&height=${h}&frames=${frames}`),
   addProject: (name: string) => req<Project[]>("POST", "/api/projects", { name }),
   settings: () => req<{ settings: Settings; editable: string[] }>("GET", "/api/settings"),
   saveSettings: (s: Settings) => req<{ settings: Settings }>("PUT", "/api/settings", s),

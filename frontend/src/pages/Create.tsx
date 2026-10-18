@@ -1,6 +1,6 @@
 import { AlertTriangle, ChevronDown, Dice5, ImagePlus, Lock, Plus, RefreshCw, Unlock, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, estimateTokens, fmtDuration, type Upload } from "../lib/api";
+import { api, estimateTokens, fmtDuration, type Forecast, type Upload } from "../lib/api";
 import { useStudio } from "../lib/store";
 import { Section, StatCard } from "../components/ui";
 
@@ -28,6 +28,8 @@ export default function Create() {
   const [seed, setSeed] = useState<number>(() => Math.floor(Math.random() * 2 ** 32));
   const [advanced, setAdvanced] = useState(false);
   const [dims, setDims] = useState<{ w: string; h: string }>({ w: "", h: "" });
+  const [fc, setFc] = useState<Forecast | null>(null);
+  const [tryAnyway, setTryAnyway] = useState(false);
   const [steps, setSteps] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -74,6 +76,19 @@ export default function Create() {
     return () => window.removeEventListener("paste", onPaste);
   }, [onFile]);
 
+  // Memory forecast for the exact size that will be rendered.
+  const fcPreset = presets?.presets[preset];
+  const [fw, fh] = fcPreset ? presets!.tiers[fcPreset.tier][upload?.orientation || "landscape"] : [0, 0];
+  const fW = advanced && +dims.w ? +dims.w : fw, fH = advanced && +dims.h ? +dims.h : fh;
+  const fFrames = presets?.lengths[length]?.frames ?? 0;
+  useEffect(() => {
+    if (!fW || !fH || !fFrames) return;
+    let live = true;
+    setTryAnyway(false);
+    api.forecast(fW, fH, fFrames).then(r => { if (live) setFc(r); }).catch(() => { if (live) setFc(null); });
+    return () => { live = false; };
+  }, [fW, fH, fFrames]);
+
   if (!presets) return <div className="p-10 text-muted">Loading…</div>;
 
   const tokens = estimateTokens(prompt);
@@ -88,7 +103,8 @@ export default function Create() {
   const blocked = !health ? "Can't reach the Studio backend." : health.blocked_reason;
   const missing = !upload ? "Drop a keyframe first." : !prompt.trim() ? "Write a motion prompt." :
     !projectName ? "Pick a project." : null;
-  const reason = blocked || missing;
+  const tooBig = fc?.level === "failed" && !tryAnyway ? "This size ran out of memory here before." : null;
+  const reason = blocked || missing || tooBig;
 
   const generate = async () => {
     if (reason) return;
@@ -99,6 +115,7 @@ export default function Create() {
         input_path: upload!.path, prompt, project: projectName, preset, length,
         seed: seedLocked ? seed : null,
       };
+      if (fc?.level === "failed" && tryAnyway) body.allow_risky = true;
       if (negative !== null) body.negative = negative;
       if (advanced && dims.w && dims.h) { body.width = +dims.w; body.height = +dims.h; }
       if (advanced && steps) body.steps = +steps;
@@ -261,6 +278,18 @@ export default function Create() {
         {memoryWarn && (
           <div className="flex items-start gap-2 rounded-[3px] border border-warn/30 bg-warn/5 px-4 py-3 text-sm text-warn">
             <AlertTriangle size={16} className="mt-0.5 shrink-0" />Close Chrome tabs and other apps before rendering — memory is tight.
+          </div>
+        )}
+
+        {fc && fc.level !== "ok" && (
+          <div className={`flex flex-col gap-2 rounded-[3px] border px-4 py-3 text-sm ${fc.level === "failed" ? "border-bad/40 bg-bad/5 text-bad" : "border-warn/30 bg-warn/5 text-warn"}`}>
+            <div className="flex items-start gap-2"><AlertTriangle size={16} className="mt-0.5 shrink-0" />{fc.message}</div>
+            {fc.level === "failed" && (
+              <label className="flex items-center gap-2 pl-6 text-[13px] text-ink-2">
+                <input type="checkbox" checked={tryAnyway} onChange={e => setTryAnyway(e.target.checked)} />
+                Try anyway (it will most likely fail)
+              </label>
+            )}
           </div>
         )}
 
