@@ -19,7 +19,7 @@ JOB_COLUMNS = [
     "frames", "steps", "split", "cfg", "shift", "input_path", "prompt_id",
     "output_path", "thumb_path", "sidecar_path", "error", "error_detail",
     "render_seconds", "favorite", "tags", "queue_pos", "parent_id",
-    "chain_id", "chain_index", "chain_total", "hidden",
+    "chain_id", "chain_index", "chain_total", "hidden", "kind", "refs",
 ]
 
 SCHEMA = """
@@ -42,7 +42,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     chain_id TEXT,        -- groups the segments of a chained ("Long") render, plus the combined clip
     chain_index INTEGER,  -- 1-based position of this segment in the chain
     chain_total INTEGER,  -- segment count the chain was built for
-    hidden INTEGER DEFAULT 0  -- chain segments hide once stitched; the combined clip stays visible
+    hidden INTEGER DEFAULT 0, -- chain segments hide once stitched; the combined clip stays visible
+    kind TEXT DEFAULT 'video', -- video (Wan, Create screen) | image (Qwen, Image screen)
+    refs TEXT DEFAULT '[]'     -- image jobs: JSON list of reference-photo paths (0-3)
 );
 CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status);
 CREATE TABLE IF NOT EXISTS projects (name TEXT PRIMARY KEY, created_at REAL);
@@ -54,7 +56,8 @@ def _migrate(c: sqlite3.Connection) -> None:
     so this is how a Studio already in use picks up new columns without losing data."""
     existing = {row[1] for row in c.execute("PRAGMA table_info(jobs)").fetchall()}
     for col, decl in (("chain_id", "TEXT"), ("chain_index", "INTEGER"),
-                      ("chain_total", "INTEGER"), ("hidden", "INTEGER DEFAULT 0")):
+                      ("chain_total", "INTEGER"), ("hidden", "INTEGER DEFAULT 0"),
+                      ("kind", "TEXT DEFAULT 'video'"), ("refs", "TEXT DEFAULT '[]'")):
         if col not in existing:
             c.execute(f"ALTER TABLE jobs ADD COLUMN {col} {decl}")
 
@@ -78,13 +81,15 @@ def _row(r: sqlite3.Row | None) -> dict[str, Any] | None:
         return None
     d = dict(r)
     d["tags"] = json.loads(d.get("tags") or "[]")
+    d["refs"] = json.loads(d.get("refs") or "[]")
+    d["kind"] = d.get("kind") or "video"
     d["favorite"] = bool(d.get("favorite"))
     return d
 
 
 def insert_job(job: dict[str, Any]) -> dict[str, Any]:
     cols = [c for c in JOB_COLUMNS if c in job]
-    vals = [json.dumps(job[c]) if c == "tags" else job[c] for c in cols]
+    vals = [json.dumps(job[c]) if c in ("tags", "refs") else job[c] for c in cols]
     with _lock:
         conn().execute(
             f"INSERT INTO jobs ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", vals)
@@ -96,8 +101,9 @@ def insert_job(job: dict[str, Any]) -> dict[str, Any]:
 def update_job(job_id: str, **fields: Any) -> dict[str, Any] | None:
     if not fields:
         return get_job(job_id)
-    if "tags" in fields:
-        fields["tags"] = json.dumps(fields["tags"])
+    for k in ("tags", "refs"):
+        if k in fields:
+            fields[k] = json.dumps(fields[k])
     if "favorite" in fields:
         fields["favorite"] = 1 if fields["favorite"] else 0
     sets = ",".join(f"{k}=?" for k in fields)
@@ -165,10 +171,12 @@ def token_history() -> dict[str, Any]:
     tok = "(width/16)*(height/16)*((frames-1)/4+1)"
     with _lock:
         c = conn()
+        # Video renders only: a still image uses a different model, so its size says nothing about Wan's memory.
+        video = "(kind IS NULL OR kind='video')"
         proven = c.execute(f"SELECT MAX({tok}) FROM jobs WHERE status IN ('done','deleted') AND error IS NULL "
-                           "AND render_seconds IS NOT NULL AND width AND height AND frames").fetchone()[0]
+                           f"AND render_seconds IS NOT NULL AND width AND height AND frames AND {video}").fetchone()[0]
         failed = [r[0] for r in c.execute(
-            f"SELECT DISTINCT {tok} FROM jobs WHERE error IS NOT NULL AND width AND height AND frames "
+            f"SELECT DISTINCT {tok} FROM jobs WHERE error IS NOT NULL AND width AND height AND frames AND {video} "
             "AND (LOWER(error) LIKE '%out of memory%' OR LOWER(error) LIKE '%blank%')")]
     return {"proven": proven, "failed": failed}
 
@@ -197,6 +205,6 @@ def stats() -> dict[str, Any]:
                           (day_start,)).fetchone()[0]
         total = c.execute("SELECT COUNT(*) FROM jobs WHERE status='done'").fetchone()[0]
         avg = c.execute("SELECT AVG(render_seconds) FROM (SELECT render_seconds FROM jobs "
-                        "WHERE status='done' AND render_seconds IS NOT NULL "
+                        "WHERE status='done' AND render_seconds IS NOT NULL AND (kind IS NULL OR kind='video') "
                         "ORDER BY finished_at DESC LIMIT 10)").fetchone()[0]
     return {"renders_today": today, "renders_total": total, "avg_render_seconds": avg}

@@ -34,6 +34,16 @@ export default function Models() {
         <div className="rounded-[3px] border border-bad/40 bg-bad/10 px-4 py-3 text-sm">{health?.pills.ssd.reason}</div>
       )}
 
+      {health && health.image?.workflow_problems?.length > 0 && (
+        <Section label="Engine check · image workflow">
+          <div className="card flex flex-col gap-2 border-warn/40 p-4">
+            {health.image.workflow_problems.map(p => (
+              <p key={p} className="flex items-start gap-2 text-sm text-warn"><AlertTriangle size={15} className="mt-0.5 shrink-0" />{p}</p>
+            ))}
+          </div>
+        </Section>
+      )}
+
       {health && health.workflow_problems.length > 0 && (
         <Section label="Engine check">
           <div className="card flex flex-col gap-2 border-warn/40 p-4">
@@ -44,48 +54,27 @@ export default function Models() {
         </Section>
       )}
 
-      <Section label="Manifest" right={status && status.missing_gb > 0 ? <span className="font-mono text-[11px] text-warn">{status.missing_gb} GB still to download</span> : null}>
-        <div className="card divide-y divide-hairline">
-          {status?.models.map(m => {
-            const dl = m.download;
-            const active = dl && ["queued", "downloading"].includes(dl.state);
-            const pct = dl && dl.total ? Math.min(100, (dl.bytes / dl.total) * 100) : 0;
-            return (
-              <div key={m.id} className="flex flex-col gap-2 px-5 py-4">
-                <div className="flex items-center gap-4">
-                  {m.state === "present" ? <CheckCircle2 size={20} className="shrink-0 text-ok" />
-                    : active ? <Loader2 size={20} className="shrink-0 animate-spin text-accent" />
-                    : <XCircle size={20} className="shrink-0 text-bad" />}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[15px]">{m.label}</p>
-                    <p className="truncate font-mono text-[11px] text-muted">{m.folder}/{m.filename}</p>
-                  </div>
-                  <span className="font-mono text-[12px] text-ink-2">{fmtGB(m.size_bytes)}</span>
-                  {m.state !== "present" && !active && (
-                    <button className="btn btn-secondary text-xs" disabled={!ssdMounted} onClick={() => setConfirm(m)}><Download size={14} />Download</button>
-                  )}
-                </div>
-                {m.state === "wrong_size" && !active && <p className="pl-9 text-[12px] text-warn">File is the wrong size ({fmtGB(m.size_on_disk)}) — probably a half-finished download. Download it again.</p>}
-                {active && (
-                  <div className="pl-9">
-                    <div className="progress"><div style={{ width: `${pct}%` }} /></div>
-                    <p className="mt-1 font-mono text-[11px] text-muted">{dl!.state === "queued" ? "Waiting for the download ahead of it…" : `${fmtGB(dl!.bytes)} of ${fmtGB(dl!.total)}`}</p>
-                  </div>
-                )}
-                {dl?.state === "failed" && <p className="pl-9 text-[12px] text-bad">Download failed: {dl.error}</p>}
-              </div>
-            );
-          })}
-        </div>
-        <p className="mt-3 text-[12px] leading-relaxed text-muted">
-          GGUF and fp16 files only — this Mac's Metal backend can't load fp8 models. Downloads come straight from Hugging Face into the SSD folders the engine reads through <span className="font-mono">extra_model_paths.yaml</span>.
-        </p>
-      </Section>
+      {([["video", "Video models", "Wan 2.2 — the Create screen"], ["image", "Image models", "Qwen Image Edit 2511 — the Image screen"]] as const).map(([group, title, sub]) => {
+        const rows = status?.models.filter(m => (m.group ?? "video") === group) ?? [];
+        const g = status?.groups?.[group];
+        if (status && !rows.length) return null;
+        return (
+          <Section key={group} label={`${title} · ${sub}`} right={g && g.missing_gb > 0 ? <span className="font-mono text-[11px] text-warn">{g.missing_gb} GB still to download</span> : g ? <span className="font-mono text-[11px] text-ok">ready</span> : null}>
+            <div className="card divide-y divide-hairline">
+              {rows.map(m => <ModelRow key={m.id} m={m} ssdMounted={ssdMounted} onDownload={() => setConfirm(m)} />)}
+            </div>
+          </Section>
+        );
+      })}
+      <p className="-mt-4 text-[12px] leading-relaxed text-muted">
+        GGUF and fp16/bf16 files only — this Mac's Metal backend can't load fp8 models. Downloads come straight from Hugging Face into the SSD folders the engine reads through <span className="font-mono">extra_model_paths.yaml</span>. Video and image models are independent: either set works without the other.
+      </p>
 
       <Confirm open={!!confirm} title="Download model?" confirm={`Download ${confirm ? fmtGB(confirm.size_bytes) : ""}`}
         body={confirm && <>
           <p className="mb-2"><span className="text-ink">{confirm.filename}</span></p>
           <p className="font-mono text-[12px]">from huggingface.co/{confirm.repo}</p>
+          {confirm.repo_path.split("/").pop() !== confirm.filename && <p className="mt-1 font-mono text-[11px] text-muted">({confirm.repo_path} — saved as {confirm.filename} so the engine can pair it with its text encoder)</p>}
           <p className="mt-3">Saves to the SSD in <span className="font-mono">{confirm.folder}/</span>. Large files take a while; you can keep using the Studio.</p>
         </>}
         onCancel={() => setConfirm(null)}
@@ -94,6 +83,37 @@ export default function Models() {
           try { await api.download(m.id); toast(`Downloading ${m.label}…`); load(); }
           catch (e) { toast((e as Error).message, "error"); }
         }} />
+    </div>
+  );
+}
+
+function ModelRow({ m, ssdMounted, onDownload }: { m: ModelItem; ssdMounted: boolean; onDownload: () => void }) {
+  const dl = m.download;
+  const active = dl && ["queued", "downloading"].includes(dl.state);
+  const pct = dl && dl.total ? Math.min(100, (dl.bytes / dl.total) * 100) : 0;
+  return (
+    <div className="flex flex-col gap-2 px-5 py-4">
+      <div className="flex items-center gap-4">
+        {m.state === "present" ? <CheckCircle2 size={20} className="shrink-0 text-ok" />
+          : active ? <Loader2 size={20} className="shrink-0 animate-spin text-accent" />
+          : <XCircle size={20} className="shrink-0 text-bad" />}
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px]">{m.label}</p>
+          <p className="truncate font-mono text-[11px] text-muted">{m.folder}/{m.filename}</p>
+        </div>
+        <span className="font-mono text-[12px] text-ink-2">{fmtGB(m.size_bytes)}</span>
+        {m.state !== "present" && !active && (
+          <button className="btn btn-secondary text-xs" disabled={!ssdMounted} onClick={onDownload}><Download size={14} />Download</button>
+        )}
+      </div>
+      {m.state === "wrong_size" && !active && <p className="pl-9 text-[12px] text-warn">File is the wrong size ({fmtGB(m.size_on_disk)}) — probably a half-finished download. Download it again.</p>}
+      {active && (
+        <div className="pl-9">
+          <div className="progress"><div style={{ width: `${pct}%` }} /></div>
+          <p className="mt-1 font-mono text-[11px] text-muted">{dl!.state === "queued" ? "Waiting for the download ahead of it…" : `${fmtGB(dl!.bytes)} of ${fmtGB(dl!.total)}`}</p>
+        </div>
+      )}
+      {dl?.state === "failed" && <p className="pl-9 text-[12px] text-bad">Download failed: {dl.error}</p>}
     </div>
   );
 }

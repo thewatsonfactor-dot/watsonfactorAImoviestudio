@@ -8,6 +8,7 @@ export interface Health {
   blocked_reason: string | null;
   queue_blocked_reason: string | null;
   workflow_problems: string[];
+  image: { ready: boolean; reason: string | null; present: number; total: number; missing_gb: number; workflow_problems: string[] };
   engine: { up: boolean; device: string | null; comfyui_version: string | null; pytorch_version: string | null };
   disk: { internal: Disk | null; ssd: Disk | null };
   memory: { level: string; used_percent: number; total_gb: number; available_gb: number };
@@ -20,9 +21,10 @@ export interface Live {
   percent: number; elapsed: number; eta_seconds: number | null;
 }
 
+export type JobKind = "video" | "image";
 export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled" | "deleted";
 export interface Job {
-  id: string; status: JobStatus; created_at: number; started_at: number | null; finished_at: number | null;
+  id: string; kind: JobKind; refs: string[]; ref_urls: (string | null)[]; status: JobStatus; created_at: number; started_at: number | null; finished_at: number | null;
   project: string; prompt: string; negative: string | null; preset: string; length: string; seed: number;
   width: number; height: number; frames: number; steps: number; split: number; cfg: number; shift: number;
   input_path: string; output_path: string | null; error: string | null; error_detail: string | null;
@@ -40,6 +42,7 @@ export interface Presets {
   lengths: Record<string, { label: string; frames: number; approx: string }>;
   tiers: Record<string, Record<string, [number, number]>>;
   presets: Record<string, PresetDef>;
+  image: { sizes: Record<string, [number, number]>; steps: number; cfg: number; shift: number; max_refs: number; note: string; avg_seconds: number | null };
   negative_default: string;
 }
 
@@ -50,11 +53,12 @@ export interface Forecast {
 export interface Project { name: string; created_at: number; renders: number }
 
 export interface ModelItem {
-  id: string; label: string; folder: string; filename: string; repo: string; repo_path: string;
+  id: string; group: "video" | "image"; label: string; folder: string; filename: string; repo: string; repo_path: string;
   size_bytes: number; path: string; state: "present" | "missing" | "wrong_size"; size_on_disk: number;
   download: { state: string; bytes: number; total: number; error: string | null } | null;
 }
-export interface ModelsStatus { models: ModelItem[]; present: number; total: number; missing_gb: number }
+export interface GroupStatus { present: number; total: number; missing_gb: number }
+export interface ModelsStatus { models: ModelItem[]; present: number; total: number; missing_gb: number; groups: Record<string, GroupStatus> }
 
 export interface Upload { path: string; width: number; height: number; orientation: string; url: string }
 
@@ -93,6 +97,9 @@ export const api = {
   download: (id: string) => req<unknown>("POST", `/api/models/${id}/download`),
   upload: (file: File) => { const f = new FormData(); f.append("file", file); return req<Upload>("POST", "/api/upload", f); },
   createJob: (body: Record<string, unknown>) => req<Job>("POST", "/api/jobs", body),
+  createImage: (body: { prompt: string; refs: string[]; aspect?: string; project?: string; seed?: number | null }) =>
+    req<Job>("POST", "/api/images", body),
+  toKeyframe: (id: string) => req<Upload>("POST", `/api/library/${id}/to-keyframe`),
   jobs: (scope = "active") => req<Job[]>("GET", `/api/jobs?scope=${scope}`),
   cancel: (id: string) => req<Job>("POST", `/api/jobs/${id}/cancel`),
   dismiss: (id: string) => req<unknown>("POST", `/api/jobs/${id}/dismiss`),
@@ -136,6 +143,20 @@ export function timeAgo(ts: number | null): string {
   if (d < 3600) return `${Math.floor(d / 60)} min ago`;
   if (d < 86400) return `${Math.floor(d / 3600)} h ago`;
   return new Date(ts * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+/** What a job is, in the words the UI uses: "Standard · 81f" for video, "Image · still" for a picture. */
+export function jobTag(j: Job, presets: Presets | null): string {
+  if (j.kind === "image") return `Image · ${j.refs.length ? `${j.refs.length} ref${j.refs.length > 1 ? "s" : ""}` : "text only"}`;
+  return `${presets?.presets[j.preset]?.label ?? j.preset} · ${j.frames}f`;
+}
+
+/** Library/Renders "try again" for an image job: back to the Image screen with the same references. */
+export function imageDraftFrom(j: Job) {
+  return {
+    kind: "image" as const, prompt: j.prompt, project: j.project, aspect: orientationOf(j.width, j.height),
+    refs: j.refs.map((path, i) => ({ path, url: j.ref_urls[i] ?? "", width: 0, height: 0, orientation: "" })).filter(r => r.url),
+  };
 }
 
 export function orientationOf(w: number, h: number): string {

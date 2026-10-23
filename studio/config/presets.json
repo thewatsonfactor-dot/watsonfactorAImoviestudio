@@ -35,5 +35,10 @@
     "failed_tokens": 75600,
     "note": "Latent tokens = (w/16)*(h/16)*((frames-1)/4+1). 832x480x81 (32,760) rendered fine on Oct 17 2026; 1280x720x81 (75,600) ran out of GPU memory and came out blank. Job history moves both limits."
   },
-  "negative_default": "blurry, low quality, distorted face, extra limbs, warped hands, flicker, jpeg artifacts, watermark, text, subtitles, static frame"
+  "image": {
+    "sizes": { "landscape": [1664, 960], "portrait": [960, 1664], "square": [1328, 1328] },
+    "steps": 4, "cfg": 1.0, "shift": 3.1, "max_refs": 3,
+    "note": "Qwen-Image-Edit-2511 with the 4-step Lightning LoRA. Landscape and portrait are exactly 2x the Standard video size (832x480), so a still drops straight into Create without being stretched; square is Qwen's native 1328."
+  },
+  "negative_default":"blurry, low quality, distorted face, extra limbs, warped hands, flicker, jpeg artifacts, watermark, text, subtitles, static frame"
 }

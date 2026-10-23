@@ -6,22 +6,26 @@ from typing import Any
 
 from . import comfy, config, models, system, workflow
 
-_wf_cache: dict[str, Any] = {"at": 0.0, "problems": None, "engine_started": None}
+_wf_cache: dict[str, dict[str, Any]] = {}
 
 
-async def _workflow_problems(engine_started: Any) -> list[str] | None:
-    """Validate the template against the engine; cached, refreshed every 60s or on engine restart."""
+async def _workflow_problems(name: str, engine_started: Any) -> list[str] | None:
+    """Validate a template against the engine; cached per template, refreshed every 60s or on engine restart."""
     now = time.time()
-    if (_wf_cache["problems"] is not None and now - _wf_cache["at"] < 60
-            and _wf_cache["engine_started"] == engine_started):
-        return _wf_cache["problems"]
-    problems = await workflow.validate(config.settings()["workflow"])
-    _wf_cache.update(at=now, problems=problems, engine_started=engine_started)
+    c = _wf_cache.get(name)
+    if c and c["problems"] is not None and now - c["at"] < 60 and c["engine_started"] == engine_started:
+        return c["problems"]
+    problems = await workflow.validate(name)
+    _wf_cache[name] = {"at": now, "problems": problems, "engine_started": engine_started}
     return problems
 
 
 def invalidate() -> None:
-    _wf_cache["problems"] = None
+    _wf_cache.clear()
+
+
+def _group(ms: dict[str, Any], name: str) -> dict[str, Any]:
+    return ms.get("groups", {}).get(name) or {"present": 0, "total": 0, "missing_gb": 0}
 
 
 async def check() -> dict[str, Any]:
@@ -60,26 +64,49 @@ async def check() -> dict[str, Any]:
         ssd_pill = {"level": "green", "label": "SSD", "blocking": False,
                     "reason": f"{free:.0f} GB free on the SSD."}
 
-    # Models (+ workflow validation when the engine is up)
+    # Models (+ workflow validation when the engine is up). The pill covers the video models
+    # (Create); the image models (Image screen) are reported separately and never block video.
     ms = models.status() if ssd["mounted"] else {"present": 0, "total": len(config.manifest()), "missing_gb": 0}
+    vid = _group(ms, "video")
     wf_problems: list[str] = []
     if not workflow.exists(s["workflow"]):
         wf_problems = [f"Workflow template '{s['workflow']}' is missing."]
     elif stats is not None:
         # Re-validate whenever the SSD or model set changes, not just every 60s.
-        wf_problems = await _workflow_problems((ssd["mounted"], ms["present"])) or []
+        wf_problems = await _workflow_problems(s["workflow"], (ssd["mounted"], vid["present"])) or []
     if not ssd["mounted"]:
         models_pill = {"level": "red", "label": "Models", "blocking": True,
                        "reason": "Can't check models until the SSD is connected."}
-    elif ms["present"] < ms["total"]:
+    elif vid["present"] < vid["total"]:
         models_pill = {"level": "red", "label": "Models", "blocking": True,
-                       "reason": f"{ms['total'] - ms['present']} of {ms['total']} model files missing "
-                                 f"({ms['missing_gb']} GB) — see the Models screen."}
+                       "reason": f"{vid['total'] - vid['present']} of {vid['total']} video model files missing "
+                                 f"({vid['missing_gb']} GB) — see the Models screen."}
     elif wf_problems:
         models_pill = {"level": "red", "label": "Models", "blocking": True, "reason": wf_problems[0]}
     else:
         models_pill = {"level": "green", "label": "Models", "blocking": False,
-                       "reason": f"All {ms['total']} model files present."}
+                       "reason": f"All {vid['total']} video model files present."}
+
+    # Image generation (Qwen): its own readiness, so it can be ready while video isn't and vice versa.
+    img = _group(ms, "image")
+    img_wf = s.get("image_workflow", "qwen_image_edit")
+    img_problems: list[str] = []
+    if not ssd["mounted"]:
+        img_reason = ssd_pill["reason"]
+    elif stats is None:
+        img_reason = engine["reason"]
+    elif img["present"] < img["total"]:
+        img_reason = (f"{img['total'] - img['present']} of {img['total']} image model files missing "
+                      f"({img['missing_gb']} GB) — download them on the Models screen.")
+    elif not workflow.exists(img_wf):
+        img_reason = f"Workflow template '{img_wf}' is missing."
+    else:
+        img_problems = await _workflow_problems(img_wf, (ssd["mounted"], img["present"])) or []
+        img_reason = img_problems[0] if img_problems else None
+    if img_reason is None and free < s["min_free_gb"]:
+        img_reason = ssd_pill["reason"]
+    image = {"ready": img_reason is None, "reason": img_reason, "present": img["present"],
+             "total": img["total"], "missing_gb": img["missing_gb"], "workflow_problems": img_problems}
 
     # Memory (never blocks — warns)
     mem = system.memory()
@@ -102,6 +129,7 @@ async def check() -> dict[str, Any]:
         "can_generate": not blockers,
         "blocked_reason": blockers[0] if blockers else None,
         "workflow_problems": wf_problems,
+        "image": image,
         "engine": {"up": stats is not None, "device": device,
                    "comfyui_version": (stats or {}).get("system", {}).get("comfyui_version"),
                    "pytorch_version": (stats or {}).get("system", {}).get("pytorch_version")},

@@ -32,10 +32,14 @@ def status() -> dict[str, Any]:
         dl = _downloads.get(m["id"])
         items.append({**m, "path": str(p), "state": state, "size_on_disk": size,
                       "download": dl if dl and dl["state"] in ("queued", "downloading", "failed") else None})
-    present = sum(1 for i in items if i["state"] == "present")
-    need_bytes = sum(i["size_bytes"] for i in items if i["state"] != "present")
-    return {"models": items, "present": present, "total": len(items),
-            "missing_gb": round(need_bytes / 1e9, 1)}
+    def summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        need = sum(i["size_bytes"] for i in rows if i["state"] != "present")
+        return {"present": sum(1 for i in rows if i["state"] == "present"), "total": len(rows),
+                "missing_gb": round(need / 1e9, 1)}
+
+    # Each group gates its own screen: video models -> Create, image models -> Image.
+    groups = {g: summary([i for i in items if i["group"] == g]) for g in sorted({i["group"] for i in items})}
+    return {"models": items, **summary(items), "groups": groups}
 
 
 def _staging_bytes(staging: Path) -> int:

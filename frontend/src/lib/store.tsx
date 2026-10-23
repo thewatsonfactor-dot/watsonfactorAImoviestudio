@@ -1,10 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, type Health, type Job, type Presets, type Project } from "./api";
 
-export type Route = "create" | "renders" | "library" | "models" | "settings";
+export type Route = "image" | "create" | "renders" | "library" | "models" | "settings";
 export interface Toast { id: number; kind: "ok" | "error" | "info"; text: string }
 export interface Draft {
+  /** "image" drafts are for the Image screen; anything else pre-fills Create. */
+  kind?: "image" | "video";
   upload?: { path: string; url: string; width: number; height: number; orientation: string };
+  refs?: { path: string; url: string; width: number; height: number; orientation: string }[];
+  aspect?: string;
   prompt?: string; negative?: string; project?: string; preset?: string; length?: string; seed?: number | null;
 }
 

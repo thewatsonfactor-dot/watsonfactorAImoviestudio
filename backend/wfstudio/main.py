@@ -93,6 +93,8 @@ def get_presets() -> dict[str, Any]:
     for key in p["presets"]:
         p["presets"][key]["avg_seconds"] = {
             length: db.avg_render_seconds(key, length) for length in p["lengths"]}
+    if "image" in p:
+        p["image"]["avg_seconds"] = db.avg_render_seconds("image", "image")
     return p
 
 
@@ -244,6 +246,60 @@ def create_job(j: JobIn) -> dict[str, Any]:
     return engine_runner.view(engine_runner.enqueue(job))  # type: ignore[return-value]
 
 
+# ---------------------------------------------------------------- images (Qwen)
+class ImageIn(BaseModel):
+    prompt: str = Field(min_length=1)
+    refs: list[str] = []          # paths returned by /api/upload, in order: Picture 1, 2, 3
+    aspect: str | None = None     # landscape | portrait | square; default follows the first reference
+    negative: str | None = None
+    project: str | None = None
+    seed: int | None = None
+    steps: int | None = None
+    parent_id: str | None = None
+
+
+def _build_image_job(j: ImageIn) -> dict[str, Any]:
+    s, p = config.settings(), config.presets()
+    ip = p["image"]
+    if len(j.refs) > ip["max_refs"]:
+        raise HTTPException(400, f"Use at most {ip['max_refs']} reference images.")
+    for r in j.refs:
+        if not Path(r).exists():
+            raise HTTPException(400, "A reference image is gone — drop it in again.")
+    aspect = j.aspect
+    if not aspect:
+        if j.refs:
+            with Image.open(j.refs[0]) as im:
+                aspect = workflow.orientation_for(*im.size)
+        else:
+            aspect = "landscape"
+    if aspect not in ip["sizes"]:
+        raise HTTPException(400, f"Unknown shape '{aspect}' — use landscape, portrait or square.")
+    w, h = ip["sizes"][aspect]
+    return {
+        "kind": "image", "refs": list(j.refs),
+        "project": (j.project or s["default_project"]).strip(), "prompt": j.prompt.strip(),
+        "negative": j.negative or "", "preset": "image", "length": "image",
+        "seed": j.seed if j.seed is not None else runner.new_seed(),
+        "width": w, "height": h, "frames": 1, "steps": j.steps or ip["steps"], "split": 0,
+        "cfg": ip["cfg"], "shift": ip["shift"],
+        # The first reference doubles as the job's "keyframe" so queue/Renders thumbnails have a picture.
+        "input_path": j.refs[0] if j.refs else "", "parent_id": j.parent_id, "tags": [],
+    }
+
+
+@app.post("/api/images")
+def create_image(j: ImageIn) -> dict[str, Any]:
+    _require_ssd()
+    # Refuse up front rather than queue a job that can't start: a stuck image job at the front of
+    # the line would hold up every video render behind it.
+    img = models.status()["groups"].get("image") or {"present": 0, "total": 0, "missing_gb": 0}
+    if not img["total"] or img["present"] < img["total"]:
+        raise HTTPException(409, f"The image models aren't on the SSD yet ({img['total'] - img['present']} of "
+                                 f"{img['total']} files, {img['missing_gb']} GB) — download them on the Models screen.")
+    return engine_runner.view(engine_runner.enqueue(_build_image_job(j)))  # type: ignore[return-value]
+
+
 @app.get("/api/jobs")
 def list_jobs(scope: str = "active") -> list[dict[str, Any]]:
     if scope == "active":
@@ -289,7 +345,7 @@ def queue_order(ids: list[str]) -> dict[str, Any]:
 # ---------------------------------------------------------------- library
 @app.get("/api/library")
 def library(project: str | None = None, favorites: bool = False, preset: str | None = None,
-            q: str | None = None) -> list[dict[str, Any]]:
+            q: str | None = None, kind: str | None = None) -> list[dict[str, Any]]:
     # A chained ("Long") render's own segments are hidden once stitched into the combined clip,
     # so the Library shows one finished entry per render, not four.
     where, params = ["status='done'", "(hidden IS NULL OR hidden=0)"], []
@@ -298,6 +354,10 @@ def library(project: str | None = None, favorites: bool = False, preset: str | N
         params.append(project)
     if favorites:
         where.append("favorite=1")
+    if kind == "image":
+        where.append("kind='image'")
+    elif kind == "video":
+        where.append("(kind IS NULL OR kind='video')")
     if preset:
         where.append("preset=?")
         params.append(preset)
@@ -333,6 +393,14 @@ def reroll(job_id: str) -> dict[str, Any]:
     j = db.get_job(job_id)
     if not j:
         raise HTTPException(404)
+    if j.get("kind") == "image":
+        # Same prompt, references and shape; new seed.
+        if any(not Path(r).exists() for r in j.get("refs") or []):
+            raise HTTPException(400, "One of the original reference images is no longer on the SSD.")
+        clone = {k: j[k] for k in ("kind", "refs", "project", "prompt", "negative", "preset", "length",
+                                   "width", "height", "frames", "steps", "split", "cfg", "shift", "input_path")}
+        clone.update(seed=runner.new_seed(), parent_id=j["id"], tags=[])
+        return engine_runner.view(engine_runner.enqueue(clone))  # type: ignore[return-value]
     clone = {k: j[k] for k in ("project", "prompt", "negative", "preset", "length", "width", "height",
                                "frames", "steps", "split", "cfg", "shift", "input_path")}
     if not Path(clone["input_path"]).exists():
@@ -363,6 +431,25 @@ def delete(job_id: str) -> dict[str, Any]:
     return {"ok": True}
 
 
+@app.post("/api/library/{job_id}/to-keyframe")
+def to_keyframe(job_id: str) -> dict[str, Any]:
+    """Copy a finished still into the keyframe folder so Create can animate it (same shape as /api/upload).
+    A copy, not a reference: deleting the image later must not break the video made from it."""
+    _require_ssd()
+    j = db.get_job(job_id)
+    if not j or j.get("kind") != "image" or not j.get("output_path") or not Path(j["output_path"]).exists():
+        raise HTTPException(404, "That image isn't on the SSD.")
+    s = config.settings()
+    folder = Path(s["inputs_dir"]) / datetime.now().strftime("%Y-%m-%d")
+    folder.mkdir(parents=True, exist_ok=True)
+    dest = folder / f"{uuid.uuid4().hex[:8]}_still-{j['id'][:8]}.png"
+    with Image.open(j["output_path"]) as im:
+        im.convert("RGB").save(dest, "PNG")
+        w, h = im.size
+    return {"path": str(dest), "width": w, "height": h, "orientation": workflow.orientation_for(w, h),
+            "url": f"/media/inputs/{dest.relative_to(s['inputs_dir']).as_posix()}"}
+
+
 @app.post("/api/library/{job_id}/reveal")
 def reveal(job_id: str) -> dict[str, Any]:
     j = db.get_job(job_id)
@@ -387,7 +474,8 @@ def rescan() -> dict[str, Any]:
                 continue
             if meta.get("studio") != "Watson Factor AI Studio" or db.get_job(meta.get("job_id", "")):
                 continue
-            video = next((side.with_suffix(e) for e in (".mp4", ".webm", ".mkv") if side.with_suffix(e).exists()), None)
+            exts = (".png", ".jpg", ".webp") if meta.get("kind") == "image" else (".mp4", ".webm", ".mkv")
+            video = next((side.with_suffix(e) for e in exts if side.with_suffix(e).exists()), None)
             if not video:
                 continue
             thumb = side.with_suffix(".jpg")
@@ -399,10 +487,11 @@ def rescan() -> dict[str, Any]:
                 "preset": meta.get("preset"), "length": meta.get("length"), "seed": meta.get("seed"),
                 "width": meta.get("width"), "height": meta.get("height"), "frames": meta.get("frames"),
                 "steps": meta.get("steps"), "split": meta.get("split"), "cfg": meta.get("cfg"),
-                "shift": meta.get("shift"), "input_path": meta.get("input_image"),
+                "shift": meta.get("shift"), "input_path": meta.get("input_image") or (meta.get("references") or [""])[0],
                 "output_path": str(video), "thumb_path": str(thumb) if thumb.exists() else None,
                 "sidecar_path": str(side), "render_seconds": meta.get("render_seconds"),
                 "parent_id": meta.get("parent_id"), "tags": [],
+                "kind": meta.get("kind", "video"), "refs": meta.get("references", []),
             })
             added += 1
     hub.publish({"type": "library_changed"})

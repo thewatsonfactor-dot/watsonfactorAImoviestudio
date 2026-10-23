@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, Clapperboard, Play, RotateCcw, Square, Trash2, X } from "lucide-react";
 import { useState } from "react";
-import { api, fmtDuration, orientationOf, timeAgo, type Job } from "../lib/api";
+import { api, fmtDuration, imageDraftFrom, jobTag, orientationOf, timeAgo, type Job } from "../lib/api";
 import { useStudio } from "../lib/store";
 import { Empty, Section } from "../components/ui";
 
@@ -42,7 +42,7 @@ export default function Renders() {
       )}
 
       <Section label="Now rendering">
-        {running.length ? running.map(j => <LiveCard key={j.id} job={j} onCancel={() => cancel(j)} label={presets?.presets[j.preset]?.label} />)
+        {running.length ? running.map(j => <LiveCard key={j.id} job={j} onCancel={() => cancel(j)} label={j.kind === "image" ? "Image" : presets?.presets[j.preset]?.label} />)
           : <div className="card px-5 py-6 text-sm text-muted">{queued.length ? "Starting the next job…" : "The engine is idle."}</div>}
       </Section>
 
@@ -55,7 +55,7 @@ export default function Renders() {
                 {j.input_url && <img src={j.input_url} className="h-12 w-20 rounded-[2px] object-cover" alt="" />}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm">{j.prompt}</p>
-                  <p className="font-mono text-[11px] text-muted">{j.project} · {presets?.presets[j.preset]?.label ?? j.preset} · {j.width}×{j.height} · {j.frames}f</p>
+                  <p className="font-mono text-[11px] text-muted">{j.project} · {jobTag(j, presets)} · {j.width}×{j.height}</p>
                 </div>
                 <button className="btn btn-ghost" disabled={i === 0} onClick={() => move(j.id, -1)} title="Move up"><ArrowUp size={16} /></button>
                 <button className="btn btn-ghost" disabled={i === queued.length - 1} onClick={() => move(j.id, 1)} title="Move down"><ArrowDown size={16} /></button>
@@ -128,6 +128,7 @@ function RecentRow({ job }: { job: Job }) {
           <>
             {failed && job.error_detail && <button className="btn btn-ghost text-xs" onClick={() => setOpen(o => !o)}>{open ? "Hide" : "Details"}</button>}
             <button className="btn btn-secondary text-xs" onClick={() => {
+              if (job.kind === "image") { setDraft(imageDraftFrom(job)); go("image"); return; }
               setDraft({ upload: job.input_url ? { path: job.input_path, url: job.input_url, width: job.width, height: job.height, orientation: orientationOf(job.width, job.height) } : undefined,
                 prompt: job.prompt, negative: job.negative ?? undefined, project: job.project, preset: job.preset, length: job.length, seed: job.seed });
               go("create");

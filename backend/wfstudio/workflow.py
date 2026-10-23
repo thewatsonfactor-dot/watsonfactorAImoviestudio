@@ -41,6 +41,19 @@ def build(name: str, params: dict[str, Any]) -> dict[str, Any]:
     for model_id, targets in mp.get("models", {}).items():
         if model_id in models:
             _set(prompt, targets, models[model_id])
+    # Optional reference images (image workflow): fill the slots that have a picture, and remove
+    # the rest — node and wires — so the engine never sees a LoadImage pointing at nothing.
+    refs = list(params.get("references") or [])
+    slots = mp.get("references", [])
+    if len(refs) > len(slots):
+        raise ValueError(f"This workflow takes at most {len(slots)} reference images.")
+    for i, slot in enumerate(slots):
+        if i < len(refs):
+            prompt[slot["node"]]["inputs"]["image"] = refs[i]
+        else:
+            prompt.pop(slot["node"], None)
+            for node_id, input_name in slot["feeds"]:
+                prompt[node_id]["inputs"].pop(input_name, None)
     return prompt
 
 

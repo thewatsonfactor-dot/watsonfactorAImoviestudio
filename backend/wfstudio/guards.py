@@ -93,3 +93,25 @@ BLANK_MESSAGE = (
     "The render finished, but the video is blank (every frame is one flat colour), so it was not "
     "saved to the Library. This is most often the GPU running out of memory. Try a lighter "
     "quality or length, quit other apps, and Re-roll.")
+
+
+def image_problems(image: Path) -> dict[str, Any] | None:
+    """The still-image version of video_problems: None if the picture has content, else why it's blank."""
+    try:
+        from PIL import Image
+        with Image.open(image) as im:
+            lo, hi = im.convert("L").getextrema()
+    except Exception:  # noqa: BLE001 — unreadable is reported, not raised
+        return {"reason": "the image file could not be read"}
+    if hi - lo < FLAT_LUMA_RANGE:
+        return {"reason": "the image is a flat colour", "luma_range": hi - lo}
+    return None
+
+
+IMAGE_GPU_ERROR_MESSAGE = (
+    "The GPU ran out of memory while making this image. The engine called it a success, but the "
+    "picture can't be trusted, so it was not saved to the Library. Quit other apps and Re-roll; if it "
+    "keeps happening, the image model can be switched to its smaller Q3_K_M version.")
+IMAGE_BLANK_MESSAGE = (
+    "The image came out blank (one flat colour), so it was not saved to the Library. This is most "
+    "often the GPU running out of memory. Quit other apps and Re-roll.")

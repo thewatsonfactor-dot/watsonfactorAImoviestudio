@@ -158,3 +158,16 @@ def concat_videos(videos: list[Path], out: Path) -> bool:
                 Path(listfile).unlink()
             except OSError:
                 pass
+
+
+def image_thumbnail(image: Path, out: Path) -> bool:
+    """640px-wide JPEG of a still, matching make_thumbnail's size for videos."""
+    try:
+        from PIL import Image
+        with Image.open(image) as im:
+            im = im.convert("RGB")
+            im.thumbnail((640, 640 * 4))
+            im.save(out, "JPEG", quality=88)
+        return out.exists()
+    except Exception:  # noqa: BLE001
+        return False

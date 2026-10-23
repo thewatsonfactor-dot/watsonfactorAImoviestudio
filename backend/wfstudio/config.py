@@ -89,7 +89,9 @@ def manifest() -> list[dict[str, Any]]:
     for m in _read(CONFIG_DIR / "models.manifest.json")["models"]:
         want = chosen.get(m["id"])
         variant = next((v for v in m.get("variants", []) if v["quant"] == want), None)
-        out.append({**m, **variant} if variant else dict(m))
+        r = {**m, **variant} if variant else dict(m)
+        r.setdefault("group", "video")
+        out.append(r)
     return out
 
 

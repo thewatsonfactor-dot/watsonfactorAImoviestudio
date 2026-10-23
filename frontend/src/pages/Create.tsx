@@ -36,7 +36,7 @@ export default function Create() {
 
   // Remix from the Library pre-fills everything.
   useEffect(() => {
-    if (!draft) return;
+    if (!draft || draft.kind === "image") return;
     if (draft.upload) setUpload({ ...draft.upload });
     if (draft.prompt != null) setPrompt(draft.prompt);
     if (draft.negative != null) setNegative(draft.negative);

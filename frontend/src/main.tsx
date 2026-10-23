@@ -4,6 +4,7 @@ import "./styles.css";
 import { Shell, Toasts } from "./components/Shell";
 import { StudioProvider, useStudio } from "./lib/store";
 import Create from "./pages/Create";
+import ImagePage from "./pages/Image";
 import Library from "./pages/Library";
 import Models from "./pages/Models";
 import Renders from "./pages/Renders";
@@ -13,6 +14,7 @@ function Router() {
   const { route } = useStudio();
   return (
     <Shell>
+      {route === "image" && <ImagePage />}
       {route === "create" && <Create />}
       {route === "renders" && <Renders />}
       {route === "library" && <Library />}

@@ -1,5 +1,6 @@
 #!/bin/bash
-# Downloads the model manifest to the SSD, asking before each file (they're 0.25–9.7 GB).
+# Downloads the model manifest to the SSD, asking before each file (they're 0.25–13 GB).
+# Covers both sets: video (Wan, the Create screen) and image (Qwen, the Image screen). Say N to skip a set.
 # Same files the Models screen downloads; use whichever you prefer.
 set -euo pipefail
 
@@ -24,7 +25,7 @@ if not todo:
     print("All model files are already on the SSD."); sys.exit()
 print(f"{len(todo)} file(s) to download, {st['missing_gb']} GB total:\n")
 for m in todo:
-    print(f"  {m['filename']}  ({m['size_bytes']/1e9:.1f} GB)  from huggingface.co/{m['repo']}")
+    print(f"  [{m['group']}] {m['filename']}  ({m['size_bytes']/1e9:.1f} GB)  from huggingface.co/{m['repo']}")
 print()
 for m in todo:
     ans = input(f"Download {m['filename']} ({m['size_bytes']/1e9:.1f} GB)? [y/N] ").strip().lower()

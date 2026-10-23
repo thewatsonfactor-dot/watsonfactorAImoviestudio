@@ -1,9 +1,9 @@
 {
-  "note": "Sizes and paths verified on Hugging Face Oct 16 2026. No fp8 files \u2014 MPS cannot load Float8. Models with 'variants' can run at another quantization: set \"quants\": {\"<id>\": \"<quant>\"} in settings.local.json (default is each model's own 'quant').",
+  "note": "Sizes and paths verified on Hugging Face Oct 16 2026. No fp8 files — MPS cannot load Float8. Models with 'variants' can run at another quantization: set \"quants\": {\"<id>\": \"<quant>\"} in settings.local.json (default is each model's own 'quant'). Each model has a 'group': 'video' models gate the Create screen, 'image' models gate the Image screen; a missing group never blocks the other.",
   "models": [
     {
       "id": "unet_high",
-      "label": "Wan 2.2 I2V 14B \u2014 high-noise (Q4_K_M)",
+      "label": "Wan 2.2 I2V 14B — high-noise (Q4_K_M)",
       "folder": "diffusion_models",
       "filename": "Wan2.2-I2V-A14B-HighNoise-Q4_K_M.gguf",
       "repo": "QuantStack/Wan2.2-I2V-A14B-GGUF",
@@ -17,11 +17,12 @@
           "repo_path": "HighNoise/Wan2.2-I2V-A14B-HighNoise-Q3_K_M.gguf",
           "size_bytes": 7176106496
         }
-      ]
+      ],
+      "group": "video"
     },
     {
       "id": "unet_low",
-      "label": "Wan 2.2 I2V 14B \u2014 low-noise (Q4_K_M)",
+      "label": "Wan 2.2 I2V 14B — low-noise (Q4_K_M)",
       "folder": "diffusion_models",
       "filename": "Wan2.2-I2V-A14B-LowNoise-Q4_K_M.gguf",
       "repo": "QuantStack/Wan2.2-I2V-A14B-GGUF",
@@ -35,7 +36,8 @@
           "repo_path": "LowNoise/Wan2.2-I2V-A14B-LowNoise-Q3_K_M.gguf",
           "size_bytes": 7176106496
         }
-      ]
+      ],
+      "group": "video"
     },
     {
       "id": "text_encoder",
@@ -53,7 +55,8 @@
           "repo_path": "umt5-xxl-encoder-Q4_K_M.gguf",
           "size_bytes": 3655145312
         }
-      ]
+      ],
+      "group": "video"
     },
     {
       "id": "vae",
@@ -62,25 +65,97 @@
       "filename": "wan_2.1_vae.safetensors",
       "repo": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
       "repo_path": "split_files/vae/wan_2.1_vae.safetensors",
-      "size_bytes": 253815318
+      "size_bytes": 253815318,
+      "group": "video"
     },
     {
       "id": "lora_high",
-      "label": "Lightx2v 4-step speed LoRA \u2014 high-noise",
+      "label": "Lightx2v 4-step speed LoRA — high-noise",
       "folder": "loras",
       "filename": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
       "repo": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
       "repo_path": "split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
-      "size_bytes": 1226977424
+      "size_bytes": 1226977424,
+      "group": "video"
     },
     {
       "id": "lora_low",
-      "label": "Lightx2v 4-step speed LoRA \u2014 low-noise",
+      "label": "Lightx2v 4-step speed LoRA — low-noise",
       "folder": "loras",
       "filename": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
       "repo": "Comfy-Org/Wan_2.2_ComfyUI_Repackaged",
       "repo_path": "split_files/loras/wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
-      "size_bytes": 1226977424
+      "size_bytes": 1226977424,
+      "group": "video"
+    },
+    {
+      "id": "qwen_unet",
+      "group": "image",
+      "label": "Qwen Image Edit 2511 — image model (Q4_K_M)",
+      "folder": "diffusion_models",
+      "filename": "qwen-image-edit-2511-Q4_K_M.gguf",
+      "repo": "unsloth/Qwen-Image-Edit-2511-GGUF",
+      "repo_path": "qwen-image-edit-2511-Q4_K_M.gguf",
+      "size_bytes": 13244758624,
+      "quant": "Q4_K_M",
+      "variants": [
+        {
+          "quant": "Q3_K_M",
+          "filename": "qwen-image-edit-2511-Q3_K_M.gguf",
+          "repo_path": "qwen-image-edit-2511-Q3_K_M.gguf",
+          "size_bytes": 9920805472
+        }
+      ]
+    },
+    {
+      "id": "qwen_text_encoder",
+      "group": "image",
+      "label": "Qwen2.5-VL 7B text encoder (GGUF Q4_K_M)",
+      "folder": "text_encoders",
+      "filename": "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf",
+      "repo": "unsloth/Qwen2.5-VL-7B-Instruct-GGUF",
+      "repo_path": "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf",
+      "size_bytes": 4683072384,
+      "quant": "Q4_K_M",
+      "variants": [
+        {
+          "quant": "Q3_K_M",
+          "filename": "Qwen2.5-VL-7B-Instruct-Q3_K_M.gguf",
+          "repo_path": "Qwen2.5-VL-7B-Instruct-Q3_K_M.gguf",
+          "size_bytes": 3808390016
+        }
+      ]
+    },
+    {
+      "id": "qwen_mmproj",
+      "group": "image",
+      "label": "Qwen2.5-VL vision projector (BF16) — reads reference photos",
+      "folder": "text_encoders",
+      "filename": "Qwen2.5-VL-7B-Instruct-mmproj-BF16.gguf",
+      "repo": "unsloth/Qwen2.5-VL-7B-Instruct-GGUF",
+      "repo_path": "mmproj-BF16.gguf",
+      "size_bytes": 1354163040,
+      "note": "Saved under a different name than on Hugging Face on purpose: ComfyUI-GGUF only finds the mmproj whose name contains the text encoder's name (minus its quant suffix). Under its original name, reference photos would be silently ignored."
+    },
+    {
+      "id": "qwen_vae",
+      "group": "image",
+      "label": "Qwen Image VAE",
+      "folder": "vae",
+      "filename": "qwen_image_vae.safetensors",
+      "repo": "Comfy-Org/Qwen-Image",
+      "repo_path": "split_files/vae/qwen_image_vae.safetensors",
+      "size_bytes": 253806246
+    },
+    {
+      "id": "qwen_lora",
+      "group": "image",
+      "label": "Qwen Image Edit Lightning 4-step speed LoRA",
+      "folder": "loras",
+      "filename": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+      "repo": "lightx2v/Qwen-Image-Edit-2511-Lightning",
+      "repo_path": "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors",
+      "size_bytes": 849608296
     }
   ]
 }

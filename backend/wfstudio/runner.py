@@ -36,11 +36,18 @@ STAGE_LABELS = {
     "sample_2": "Sampling — pass 2 of 2",
     "decode": "Decoding frames",
     "save": "Saving video",
+    "img_canvas": "Setting up the canvas",
+    "img_sample": "Painting the image",
+    "img_save": "Saving image",
     "finishing": "Finishing up",
 }
 # Share of the progress bar each stage owns (sums to 100).
 STAGE_WEIGHTS = [("load", 10), ("prompt", 4), ("encode", 6), ("sample_1", 34),
                  ("sample_2", 34), ("decode", 8), ("save", 4)]
+# Image jobs (Qwen): one sampling pass; loading the ~19 GB of models is a bigger share of the time.
+STAGE_WEIGHTS_IMAGE = [("load", 30), ("prompt", 12), ("img_canvas", 2), ("img_sample", 46),
+                       ("decode", 6), ("img_save", 4)]
+SAMPLE_STAGES = ("sample_1", "sample_2", "img_sample")
 
 
 def slug(name: str) -> str:
@@ -94,6 +101,7 @@ class Runner:
         self._outputs: dict[str, list[dict[str, Any]]] = {}
         self._log_start: dict[str, int | None] = {}  # engine-log offset when each job was submitted
         self._node_stage: dict[str, str] = {}
+        self._last_kind: str | None = None  # model family the engine last ran (video | image)
         self._tasks: list[asyncio.Task] = []
         self._wake = asyncio.Event()
 
@@ -171,6 +179,9 @@ class Runner:
         out["thumb_url"] = media(job.get("thumb_path"), "output_dir", "output") or \
             media(job.get("input_path"), "inputs_dir", "inputs")
         out["input_url"] = media(job.get("input_path"), "inputs_dir", "inputs")
+        # A reference is usually an upload (inputs) but can be one of the Studio's own stills (output).
+        out["ref_urls"] = [media(r, "inputs_dir", "inputs") or media(r, "output_dir", "output")
+                           for r in job.get("refs") or []]
         out["file_exists"] = bool(job.get("output_path") and Path(job["output_path"]).exists())
         out["live"] = self.live.get(job["id"])
         return out
@@ -207,13 +218,16 @@ class Runner:
                 self.emit_queue()
             return
         h = await health.check()
-        if not h["can_generate"]:
-            if self.blocked_reason != h["blocked_reason"]:
-                self.blocked_reason = h["blocked_reason"]
+        head = q[0]
+        # Image jobs need the image models, video jobs the video models; neither waits on the other's.
+        reason = h["image"]["reason"] if head.get("kind") == "image" else h["blocked_reason"]
+        if reason:
+            if self.blocked_reason != reason:
+                self.blocked_reason = reason
                 self.emit_queue()
             return
         self.blocked_reason = None
-        await self._submit(q[0])
+        await self._submit(head)
 
     async def _submit(self, job: dict[str, Any]) -> None:
         s = config.settings()
@@ -222,18 +236,37 @@ class Runner:
         self.last_event_at = time.time()
         job = db.get_job(job["id"])  # type: ignore[assignment]
         self._set_live(job, "submitting")
+        kind = job.get("kind") or "video"
         try:
-            image_name = await comfy.upload_image(Path(job["input_path"]))
-            params = {
-                "image": image_name, "positive": job["prompt"], "negative": job["negative"] or "",
-                "width": job["width"], "height": job["height"], "length": job["frames"],
-                "seed": job["seed"], "steps": job["steps"], "split": job["split"],
-                "cfg": job["cfg"], "shift": job["shift"],
-                "fps": float(config.presets()["fps"]),
-                "filename_prefix": f"wfstudio_tmp/{job['id']}",
-            }
-            prompt = workflow.build(s["workflow"], params)
-            self._node_stage = workflow.stage_map(s["workflow"])
+            if self._last_kind and self._last_kind != kind:
+                # Switching between the video (Wan, ~20 GB) and image (Qwen, ~19 GB) model families:
+                # ask the engine to drop the old ones first so both never sit in 36 GB at once.
+                try:
+                    await free_engine_memory(settle_seconds=10)
+                except Exception:  # noqa: BLE001 — best effort; the engine will still swap models itself
+                    log.warning("free-memory before switching to %s models failed", kind, exc_info=True)
+            if kind == "image":
+                template = s.get("image_workflow", "qwen_image_edit")
+                refs = [await comfy.upload_image(Path(r)) for r in job.get("refs") or []]
+                params = {
+                    "references": refs, "positive": job["prompt"], "negative": job["negative"] or "",
+                    "width": job["width"], "height": job["height"], "seed": job["seed"],
+                    "steps": job["steps"], "cfg": job["cfg"], "shift": job["shift"],
+                    "filename_prefix": f"wfstudio_tmp/{job['id']}",
+                }
+            else:
+                template = s["workflow"]
+                image_name = await comfy.upload_image(Path(job["input_path"]))
+                params = {
+                    "image": image_name, "positive": job["prompt"], "negative": job["negative"] or "",
+                    "width": job["width"], "height": job["height"], "length": job["frames"],
+                    "seed": job["seed"], "steps": job["steps"], "split": job["split"],
+                    "cfg": job["cfg"], "shift": job["shift"],
+                    "fps": float(config.presets()["fps"]),
+                    "filename_prefix": f"wfstudio_tmp/{job['id']}",
+                }
+            prompt = workflow.build(template, params)
+            self._node_stage = workflow.stage_map(template)
             log_start = guards.log_size(ENGINE_LOG)
             prompt_id = await comfy.queue_prompt(prompt, self.client_id)
         except comfy.EngineError as e:
@@ -242,6 +275,10 @@ class Runner:
         except (httpx.HTTPError, OSError) as e:
             self._fail(job, f"Couldn't reach the engine: {e}", None)
             return
+        except ValueError as e:
+            self._fail(job, str(e), None)
+            return
+        self._last_kind = kind
         self._outputs.pop(prompt_id, None)
         self._log_start[job["id"]] = log_start
         job = db.update_job(job["id"], prompt_id=prompt_id)  # type: ignore[assignment]
@@ -255,7 +292,7 @@ class Runner:
         started = job.get("started_at") or time.time()
         elapsed = time.time() - started
         pct = 0.0
-        for name, w in STAGE_WEIGHTS:
+        for name, w in (STAGE_WEIGHTS_IMAGE if job.get("kind") == "image" else STAGE_WEIGHTS):
             if name == stage:
                 if value is not None and maximum:
                     pct += w * min(value / maximum, 1.0)
@@ -272,7 +309,7 @@ class Runner:
         elif avg:
             eta = max(avg - elapsed, 0)
         label = STAGE_LABELS.get(stage, stage)
-        if stage.startswith("sample") and value is not None and maximum:
+        if stage in SAMPLE_STAGES and value is not None and maximum:
             label = f"{label} · step {value}/{maximum}"
         if job.get("chain_total") and job["chain_total"] > 1:
             label = f"{label} — part {job['chain_index']}/{job['chain_total']}"
@@ -319,7 +356,8 @@ class Runner:
             stage = self._node_stage.get(str(d["node"]), "load")
             self._set_live(job, stage)
         elif t == "progress" and job:
-            stage = self._node_stage.get(str(d.get("node")), "sample_1")
+            stage = self._node_stage.get(str(d.get("node")),
+                                         "img_sample" if job.get("kind") == "image" else "sample_1")
             self._set_live(job, stage, d.get("value"), d.get("max"))
         elif t == "executed" and d.get("prompt_id"):
             out = d.get("output") or {}
@@ -400,6 +438,9 @@ class Runner:
             return
         self._set_live(cur, "finishing")
         s = config.settings()
+        if cur.get("kind") == "image":
+            await self._finalize_image(cur, files)
+            return
         video = next((f for f in files if str(f["filename"]).lower().endswith((".mp4", ".webm", ".mov", ".mkv"))),
                      files[0] if files else None)
         if not video:
@@ -534,6 +575,59 @@ class Runner:
             db.update_job(g["id"], hidden=1)
         self.emit_job(row)
         self.hub.publish({"type": "library_changed"})
+
+    async def _finalize_image(self, cur: dict[str, Any], files: list[dict[str, Any]]) -> None:
+        """Image jobs: same guarantees as video — moved to the project folder, checked for a hidden
+        GPU failure, thumbnail + JSON sidecar written — but no chaining and no video checks."""
+        s = config.settings()
+        pic = next((f for f in files if str(f["filename"]).lower().endswith((".png", ".jpg", ".jpeg", ".webp"))), None)
+        if not pic:
+            self._fail(cur, "The engine finished but didn't save an image. Check the Save step in the workflow.", None)
+            return
+        finished = time.time()
+        date = datetime.now().strftime("%Y-%m-%d")
+        dest_dir = Path(s["output_dir"]) / slug(cur["project"] or s["default_project"])
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / f"{date}_{cur['id'][:8]}{Path(pic['filename']).suffix or '.png'}"
+        try:
+            await self._collect(pic, dest)
+        except Exception as e:  # noqa: BLE001
+            self._fail(cur, f"The image finished but couldn't be saved to the SSD: {e}", None)
+            return
+        gpu = guards.engine_log_problems(ENGINE_LOG, self._log_start.pop(cur["id"], None))
+        blank = None if gpu else await asyncio.to_thread(guards.image_problems, dest)
+        if gpu or blank:
+            kept = await asyncio.to_thread(self._quarantine, dest)
+            detail = json.dumps({"check": "engine log" if gpu else "blank image", **(gpu or blank),
+                                 "saved_for_inspection": str(kept) if kept else None})
+            log.warning("job %s rejected: %s", cur["id"], detail)
+            self._fail(cur, guards.IMAGE_GPU_ERROR_MESSAGE if gpu else guards.IMAGE_BLANK_MESSAGE, detail)
+            return
+        thumb = dest.with_suffix(".jpg")
+        has_thumb = await asyncio.to_thread(system.image_thumbnail, dest, thumb)
+        render_seconds = finished - (cur["started_at"] or finished)
+        sidecar = dest.with_suffix(".json")
+        image_models = {m["id"]: m["filename"] for m in config.manifest() if m["group"] == "image"}
+        meta = {
+            "studio": "Watson Factor AI Studio", "kind": "image", "job_id": cur["id"], "project": cur["project"],
+            "prompt": cur["prompt"], "negative": cur["negative"], "seed": cur["seed"],
+            "preset": cur["preset"], "length": cur["length"], "frames": 1,
+            "width": cur["width"], "height": cur["height"], "steps": cur["steps"],
+            "cfg": cur["cfg"], "shift": cur["shift"], "references": cur.get("refs") or [],
+            "render_seconds": round(render_seconds, 1),
+            "created_at": datetime.fromtimestamp(cur["created_at"]).isoformat(timespec="seconds"),
+            "finished_at": datetime.fromtimestamp(finished).isoformat(timespec="seconds"),
+            "models": image_models, "workflow": s.get("image_workflow", "qwen_image_edit"),
+            "parent_id": cur.get("parent_id"),
+        }
+        sidecar.write_text(json.dumps(meta, indent=2))
+        self.live.pop(cur["id"], None)
+        done = db.update_job(cur["id"], status="done", finished_at=finished, output_path=str(dest),
+                             thumb_path=str(thumb) if has_thumb else None, sidecar_path=str(sidecar),
+                             render_seconds=round(render_seconds, 1))
+        self.emit_job(done)
+        self.hub.publish({"type": "library_changed"})
+        self.wake()
 
     @staticmethod
     def _quarantine(dest: Path) -> Path | None:

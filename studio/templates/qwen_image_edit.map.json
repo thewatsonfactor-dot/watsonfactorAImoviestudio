@@ -1,0 +1,35 @@
+{
+  "_doc": "Qwen-Image-Edit-2511 image workflow, built from ComfyUI's own image_qwen_image_edit_2511 template (4-step Lightning path) with GGUF loaders and an empty canvas instead of a resized reference. Reference images are optional: each 'references' slot names its LoadImage node and the encoder inputs it feeds; unused slots are removed before submitting. With no references at all, the encoders still run (text-to-image).",
+  "params": {
+    "positive": [["20", "prompt"]],
+    "negative": [["21", "prompt"]],
+    "width": [["30", "width"]],
+    "height": [["30", "height"]],
+    "seed": [["40", "seed"]],
+    "steps": [["40", "steps"]],
+    "cfg": [["40", "cfg"]],
+    "shift": [["4", "shift"]],
+    "filename_prefix": [["60", "filename_prefix"]]
+  },
+  "references": [
+    { "node": "10", "feeds": [["20", "image1"], ["21", "image1"]] },
+    { "node": "11", "feeds": [["20", "image2"], ["21", "image2"]] },
+    { "node": "12", "feeds": [["20", "image3"], ["21", "image3"]] }
+  ],
+  "models": {
+    "qwen_unet": [["1", "unet_name"]],
+    "qwen_text_encoder": [["2", "clip_name"]],
+    "qwen_vae": [["3", "vae_name"]],
+    "qwen_lora": [["6", "lora_name"]]
+  },
+  "stages": {
+    "1": "load", "2": "load", "3": "load", "4": "load", "5": "load", "6": "load",
+    "10": "load", "11": "load", "12": "load",
+    "20": "prompt", "21": "prompt", "22": "prompt", "23": "prompt",
+    "30": "img_canvas",
+    "40": "img_sample",
+    "50": "decode",
+    "60": "img_save"
+  },
+  "output_node": "60"
+}
