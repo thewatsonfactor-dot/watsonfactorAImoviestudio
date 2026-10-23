@@ -113,6 +113,38 @@ def add_project(p: ProjectIn) -> list[dict[str, Any]]:
     return db.projects()
 
 
+# ---------------------------------------------------------------- shot recipe blocks
+@app.get("/api/prompt-library")
+def get_prompt_library() -> dict[str, Any]:
+    return config.prompt_library()
+
+
+class BlockIn(BaseModel):
+    kind: str = Field(pattern="^(video|image)$")
+    category: str = Field(min_length=1, max_length=40)
+    label: str = Field(min_length=1, max_length=60)
+    text: str = Field(min_length=1, max_length=1200)
+
+
+@app.post("/api/prompt-library/blocks")
+def add_block(b: BlockIn) -> dict[str, Any]:
+    blocks = config.custom_blocks()
+    blocks.append({"id": f"custom_{uuid.uuid4().hex[:8]}", "kind": b.kind, "category": b.category,
+                   "label": b.label.strip(), "text": b.text.strip()})
+    config.save_custom_blocks(blocks)
+    return config.prompt_library()
+
+
+@app.delete("/api/prompt-library/blocks/{block_id}")
+def delete_block(block_id: str) -> dict[str, Any]:
+    blocks = config.custom_blocks()
+    keep = [b for b in blocks if b["id"] != block_id]
+    if len(keep) == len(blocks):
+        raise HTTPException(404, "Only your own blocks can be deleted.")
+    config.save_custom_blocks(keep)
+    return config.prompt_library()
+
+
 # ---------------------------------------------------------------- models
 @app.get("/api/models")
 def get_models() -> dict[str, Any]:

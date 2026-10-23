@@ -1,0 +1,537 @@
+{
+  "_doc": "Shot recipe blocks for the Create (video) and Image screens. Each category is one dropdown; picking an option appends its text to the prompt as a sentence, in category order. Written as plain visual description (what is on screen), because Wan and Qwen follow that better than instructions. Daniel's own blocks are saved by the Studio to prompt_library.local.json (git-ignored) and appear after these. Camera moves follow the 46-move list from aicameramovements.com (names and grouping only; the descriptions are our own).",
+  "video": [
+    {
+      "id": "camera",
+      "label": "Camera move",
+      "options": [
+        {
+          "id": "static",
+          "label": "Static shot",
+          "text": "The camera stays completely still for the whole shot; only the subject and the scene move.",
+          "group": "Pan / tilt"
+        },
+        {
+          "id": "pan_right",
+          "label": "Pan right",
+          "text": "The camera stays in place and turns slowly to the right across the scene.",
+          "group": "Pan / tilt"
+        },
+        {
+          "id": "pan_left",
+          "label": "Pan left",
+          "text": "The camera stays in place and turns slowly to the left across the scene.",
+          "group": "Pan / tilt"
+        },
+        {
+          "id": "whip_pan_right",
+          "label": "Whip pan right",
+          "text": "The camera whips suddenly to the right in a fast blurred snap, landing on a new subject.",
+          "group": "Pan / tilt"
+        },
+        {
+          "id": "whip_pan_left",
+          "label": "Whip pan left",
+          "text": "The camera whips suddenly to the left in a fast blurred snap, landing on a new subject.",
+          "group": "Pan / tilt"
+        },
+        {
+          "id": "tilt_up",
+          "label": "Tilt up",
+          "text": "The camera stays in place and tilts slowly upward, from the ground up to the subject's face.",
+          "group": "Pan / tilt"
+        },
+        {
+          "id": "tilt_down",
+          "label": "Tilt down",
+          "text": "The camera stays in place and tilts slowly downward, from the subject's face down to the ground.",
+          "group": "Pan / tilt"
+        },
+        {
+          "id": "slow_zoom_in",
+          "label": "Slow zoom in",
+          "text": "The view slowly and gradually zooms in on the main subject, ending on a tighter frame.",
+          "group": "Zoom / lens"
+        },
+        {
+          "id": "slow_zoom_out",
+          "label": "Slow zoom out",
+          "text": "The view slowly and gradually zooms out from the main subject, revealing more of the scene.",
+          "group": "Zoom / lens"
+        },
+        {
+          "id": "fast_zoom_in",
+          "label": "Fast zoom in",
+          "text": "The view zooms in quickly and decisively onto the main subject.",
+          "group": "Zoom / lens"
+        },
+        {
+          "id": "fast_zoom_out",
+          "label": "Fast zoom out",
+          "text": "The view zooms out quickly and decisively away from the main subject.",
+          "group": "Zoom / lens"
+        },
+        {
+          "id": "crash_zoom_in",
+          "label": "Crash zoom in",
+          "text": "The view snaps abruptly from wide straight onto the main subject, ending on a punchy close-up.",
+          "group": "Zoom / lens"
+        },
+        {
+          "id": "crash_zoom_out",
+          "label": "Crash zoom out",
+          "text": "The view starts close on the main subject, then snaps abruptly outward as the surrounding space rushes into view, ending on a bold wide composition.",
+          "group": "Zoom / lens"
+        },
+        {
+          "id": "dolly_in",
+          "label": "Dolly in",
+          "text": "The camera moves slowly and steadily forward in a straight line toward the main subject, keeping the same height, until the subject fills more of the frame.",
+          "group": "Dolly / track"
+        },
+        {
+          "id": "dolly_out",
+          "label": "Dolly out",
+          "text": "The camera moves slowly and steadily backward in a straight line away from the main subject, revealing more of the surroundings.",
+          "group": "Dolly / track"
+        },
+        {
+          "id": "tracking",
+          "label": "Tracking shot",
+          "text": "The camera moves smoothly through the scene alongside the subject, keeping pace with them.",
+          "group": "Dolly / track"
+        },
+        {
+          "id": "follow",
+          "label": "Follow / over the shoulder",
+          "text": "The camera follows close behind the subject at shoulder height, their shoulder and the back of their head in the foreground.",
+          "group": "Dolly / track"
+        },
+        {
+          "id": "reverse_tracking",
+          "label": "Reverse tracking (walk and talk)",
+          "text": "The camera moves backward in front of the subject as they walk toward it, keeping their face in frame.",
+          "group": "Dolly / track"
+        },
+        {
+          "id": "side_tracking",
+          "label": "Side tracking",
+          "text": "The camera moves sideways alongside the subject, parallel to their path, keeping them in profile.",
+          "group": "Dolly / track"
+        },
+        {
+          "id": "low_tracking",
+          "label": "Low tracking",
+          "text": "The camera glides just above the ground beside the subject at the speed of their steps, the ground sliding through the bottom of the frame.",
+          "group": "Dolly / track"
+        },
+        {
+          "id": "vehicle_tracking",
+          "label": "Vehicle tracking",
+          "text": "The camera travels alongside the moving vehicle at the same speed, the road and scenery streaming past.",
+          "group": "Dolly / track"
+        },
+        {
+          "id": "chase",
+          "label": "Chase shot",
+          "text": "The camera races close behind the fleeing subject, fast and urgent, shaking with the pursuit.",
+          "group": "Dolly / track"
+        },
+        {
+          "id": "truck_right",
+          "label": "Truck right",
+          "text": "The camera slides sideways to the right in a straight line, keeping the subject in view.",
+          "group": "Physical moves"
+        },
+        {
+          "id": "truck_left",
+          "label": "Truck left",
+          "text": "The camera slides sideways to the left in a straight line, keeping the subject in view.",
+          "group": "Physical moves"
+        },
+        {
+          "id": "pedestal_up",
+          "label": "Pedestal up",
+          "text": "The whole camera rises straight up, staying level, revealing the scene from higher.",
+          "group": "Physical moves"
+        },
+        {
+          "id": "pedestal_down",
+          "label": "Pedestal down",
+          "text": "The whole camera lowers straight down, staying level, ending at a lower viewpoint.",
+          "group": "Physical moves"
+        },
+        {
+          "id": "slider_right",
+          "label": "Slider right",
+          "text": "The camera makes a short smooth slide to the right, foreground and background shifting against each other.",
+          "group": "Physical moves"
+        },
+        {
+          "id": "slider_left",
+          "label": "Slider left",
+          "text": "The camera makes a short smooth slide to the left, foreground and background shifting against each other.",
+          "group": "Physical moves"
+        },
+        {
+          "id": "push_past",
+          "label": "Push past",
+          "text": "The camera glides forward past a blurred object in the foreground, revealing the subject beyond it.",
+          "group": "Physical moves"
+        },
+        {
+          "id": "arc_right",
+          "label": "Arc right",
+          "text": "The camera moves in a slow, smooth curve to the right around the main subject, same distance and height, ending on a new right-side angle.",
+          "group": "Physical moves"
+        },
+        {
+          "id": "arc_left",
+          "label": "Arc left",
+          "text": "The camera moves in a slow, smooth curve to the left around the main subject, same distance and height, ending on a new left-side angle.",
+          "group": "Physical moves"
+        },
+        {
+          "id": "orbit_cw",
+          "label": "Orbit clockwise",
+          "text": "The camera circles all the way around the main subject clockwise at a steady distance and height.",
+          "group": "Physical moves"
+        },
+        {
+          "id": "orbit_ccw",
+          "label": "Orbit counterclockwise",
+          "text": "The camera circles all the way around the main subject counterclockwise at a steady distance and height.",
+          "group": "Physical moves"
+        },
+        {
+          "id": "handheld",
+          "label": "Handheld",
+          "text": "The camera is handheld at eye level, swaying slightly and naturally with the operator's breathing and steps.",
+          "group": "Human camera"
+        },
+        {
+          "id": "snorricam",
+          "label": "Body-mounted (Snorricam)",
+          "text": "The camera is fixed to the subject's chest facing their face, which stays still in frame while the background lurches and swings behind them.",
+          "group": "Human camera"
+        },
+        {
+          "id": "crane_up",
+          "label": "Crane up",
+          "text": "The camera rises slowly and smoothly upward, looking down as more of the scene comes into view.",
+          "group": "Drone / crane"
+        },
+        {
+          "id": "crane_down",
+          "label": "Crane down",
+          "text": "The camera descends slowly and smoothly from high above down toward the subject.",
+          "group": "Drone / crane"
+        },
+        {
+          "id": "drone_push_in",
+          "label": "Drone push in",
+          "text": "An aerial camera glides forward high above the ground toward the destination.",
+          "group": "Drone / crane"
+        },
+        {
+          "id": "drone_pull_back",
+          "label": "Drone pull back",
+          "text": "An aerial camera flies backward and upward away from the subject, revealing the wide landscape.",
+          "group": "Drone / crane"
+        },
+        {
+          "id": "helicopter",
+          "label": "Helicopter shot",
+          "text": "A high aerial view sweeping slowly and broadly over the landscape.",
+          "group": "Drone / crane"
+        },
+        {
+          "id": "fpv",
+          "label": "First-person view",
+          "text": "First-person view from the character's eyes moving forward, their hands visible at the bottom of the frame.",
+          "group": "Specials"
+        },
+        {
+          "id": "tilt_shift",
+          "label": "Tilt-shift",
+          "text": "Tilt-shift miniature look, only a narrow band in the middle sharp, the top and bottom blurred.",
+          "group": "Specials"
+        },
+        {
+          "id": "infinite_zoom",
+          "label": "Infinite zoom",
+          "text": "The view zooms continuously inward toward the center of the frame, deeper and deeper.",
+          "group": "Specials"
+        },
+        {
+          "id": "earth_zoom_out",
+          "label": "Earth zoom out",
+          "text": "The view rockets upward and away from the street, past rooftops and clouds, until the whole planet is visible.",
+          "group": "Specials"
+        },
+        {
+          "id": "time_lapse",
+          "label": "Time-lapse",
+          "text": "The camera stays fixed while time passes quickly, clouds and light racing across the scene.",
+          "group": "Specials"
+        },
+        {
+          "id": "pass_through",
+          "label": "Pass through",
+          "text": "The camera moves straight through the window into the room beyond.",
+          "group": "Specials"
+        }
+      ]
+    },
+    {
+      "id": "pace",
+      "label": "Pace",
+      "options": [
+        {
+          "id": "real_time",
+          "label": "Real time",
+          "text": "Everything moves at natural, real-time speed."
+        },
+        {
+          "id": "slow_mo",
+          "label": "Slow motion",
+          "text": "Everything moves in smooth slow motion."
+        },
+        {
+          "id": "tense",
+          "label": "Tense and still",
+          "text": "The subjects barely move, holding perfectly still with tension."
+        },
+        {
+          "id": "explosive",
+          "label": "Fast and violent",
+          "text": "The action is sudden, fast and violent."
+        }
+      ]
+    },
+    {
+      "id": "feel",
+      "label": "Camera feel",
+      "options": [
+        {
+          "id": "smooth",
+          "label": "Smooth gimbal",
+          "text": "The camera motion is perfectly smooth and stable."
+        },
+        {
+          "id": "handheld",
+          "label": "Handheld shake",
+          "text": "The camera is handheld with a slight natural shake."
+        },
+        {
+          "id": "documentary",
+          "label": "Documentary",
+          "text": "Raw documentary camera work, slightly unsteady, reacting to the action."
+        }
+      ]
+    },
+    {
+      "id": "atmosphere",
+      "label": "Atmosphere",
+      "options": [
+        {
+          "id": "rain",
+          "label": "Rain falling",
+          "text": "Rain falls steadily through the frame and splashes on the ground."
+        },
+        {
+          "id": "smoke",
+          "label": "Smoke drifting",
+          "text": "Smoke drifts slowly through the air."
+        },
+        {
+          "id": "wind",
+          "label": "Wind",
+          "text": "Wind moves through hair and clothing."
+        },
+        {
+          "id": "neon_flicker",
+          "label": "Neon flicker",
+          "text": "Neon signs flicker, their colored light pulsing on wet surfaces."
+        },
+        {
+          "id": "dust",
+          "label": "Dust in light",
+          "text": "Dust floats in shafts of light."
+        }
+      ]
+    }
+  ],
+  "image": [
+    {
+      "id": "shot",
+      "label": "Shot size",
+      "options": [
+        {
+          "id": "extreme_wide",
+          "label": "Extreme wide",
+          "text": "Extreme wide shot, the people small in a large environment."
+        },
+        {
+          "id": "wide",
+          "label": "Wide",
+          "text": "Wide shot, full bodies in frame with the surroundings visible."
+        },
+        {
+          "id": "medium",
+          "label": "Medium",
+          "text": "Medium shot, framed from the waist up."
+        },
+        {
+          "id": "close",
+          "label": "Close-up",
+          "text": "Close-up on the face."
+        },
+        {
+          "id": "extreme_close",
+          "label": "Extreme close-up",
+          "text": "Extreme close-up on the eyes."
+        },
+        {
+          "id": "ots",
+          "label": "Over the shoulder",
+          "text": "Over-the-shoulder shot, one person's shoulder soft in the foreground, the other in focus beyond."
+        },
+        {
+          "id": "two_shot",
+          "label": "Two-shot",
+          "text": "Two-shot, both people fully in frame facing each other."
+        }
+      ]
+    },
+    {
+      "id": "angle",
+      "label": "Camera angle",
+      "options": [
+        {
+          "id": "eye",
+          "label": "Eye level",
+          "text": "Camera at eye level."
+        },
+        {
+          "id": "low",
+          "label": "Low angle",
+          "text": "Low camera angle looking up, making the subject look powerful."
+        },
+        {
+          "id": "high",
+          "label": "High angle",
+          "text": "High camera angle looking down on the subject."
+        },
+        {
+          "id": "dutch",
+          "label": "Dutch tilt",
+          "text": "Tilted dutch angle, the horizon off-level, uneasy."
+        },
+        {
+          "id": "overhead",
+          "label": "Overhead",
+          "text": "Straight-down overhead view."
+        }
+      ]
+    },
+    {
+      "id": "lens",
+      "label": "Lens",
+      "options": [
+        {
+          "id": "24mm",
+          "label": "24mm wide",
+          "text": "Shot on a 24mm wide-angle lens, deep perspective."
+        },
+        {
+          "id": "35mm",
+          "label": "35mm",
+          "text": "Shot on a 35mm lens, natural perspective."
+        },
+        {
+          "id": "50mm",
+          "label": "50mm",
+          "text": "Shot on a 50mm lens."
+        },
+        {
+          "id": "85mm",
+          "label": "85mm portrait",
+          "text": "Shot on an 85mm lens, shallow depth of field, background softly blurred."
+        },
+        {
+          "id": "anamorphic",
+          "label": "Anamorphic",
+          "text": "Anamorphic lens, oval bokeh and horizontal lens flares."
+        }
+      ]
+    },
+    {
+      "id": "light",
+      "label": "Lighting",
+      "options": [
+        {
+          "id": "neon_noir",
+          "label": "Neon noir",
+          "text": "Night, red and blue neon light reflecting on wet surfaces, deep shadows."
+        },
+        {
+          "id": "golden",
+          "label": "Golden hour",
+          "text": "Warm golden-hour sunlight, long soft shadows."
+        },
+        {
+          "id": "overhead_harsh",
+          "label": "Harsh overhead",
+          "text": "A single harsh overhead light, hard shadows under the eyes."
+        },
+        {
+          "id": "moonlight",
+          "label": "Moonlight",
+          "text": "Cold blue moonlight, dark and quiet."
+        },
+        {
+          "id": "practical",
+          "label": "Practical lamps",
+          "text": "Lit only by practical lamps in the scene, warm pools of light in darkness."
+        },
+        {
+          "id": "overcast",
+          "label": "Overcast day",
+          "text": "Flat overcast daylight, muted colors."
+        }
+      ]
+    },
+    {
+      "id": "look",
+      "label": "Film look",
+      "options": [
+        {
+          "id": "35mm_still",
+          "label": "35mm film still",
+          "text": "Cinematic 35mm film still, natural film grain."
+        },
+        {
+          "id": "digital",
+          "label": "Clean digital cinema",
+          "text": "Clean, sharp digital cinema look."
+        },
+        {
+          "id": "16mm",
+          "label": "Grainy 16mm",
+          "text": "Grainy 16mm film, soft and gritty."
+        },
+        {
+          "id": "noir_bw",
+          "label": "Black-and-white noir",
+          "text": "High-contrast black-and-white film noir."
+        },
+        {
+          "id": "teal_orange",
+          "label": "Teal and orange",
+          "text": "Blockbuster teal-and-orange color grade."
+        }
+      ]
+    }
+  ]
+}

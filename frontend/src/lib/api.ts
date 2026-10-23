@@ -64,6 +64,23 @@ export interface Upload { path: string; width: number; height: number; orientati
 
 export type Settings = Record<string, string | number | boolean>;
 
+export interface PromptBlock { id: string; label: string; text: string; group?: string; custom?: boolean }
+export interface PromptCategory { id: string; label: string; options: PromptBlock[] }
+export type PromptLibrary = Record<"video" | "image", PromptCategory[]>;
+export type Picks = Record<string, string>; // category id -> block id
+
+/** The prompt the engine actually reads: what the user typed, then each picked block, in category order. */
+export function composePrompt(base: string, cats: PromptCategory[] | undefined, picks: Picks): string {
+  const parts: string[] = [];
+  const b = base.trim();
+  if (b) parts.push(/[.!?]$/.test(b) ? b : `${b}.`);
+  for (const c of cats ?? []) {
+    const o = c.options.find(x => x.id === picks[c.id]);
+    if (o) parts.push(o.text.trim());
+  }
+  return parts.join(" ");
+}
+
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   const init: RequestInit = { method, headers: {} };
   if (body instanceof FormData) init.body = body;
@@ -113,6 +130,10 @@ export const api = {
   reroll: (id: string) => req<Job>("POST", `/api/library/${id}/reroll`),
   remove: (id: string) => req<unknown>("POST", `/api/library/${id}/delete`),
   reveal: (id: string) => req<unknown>("POST", `/api/library/${id}/reveal`),
+  promptLibrary: () => req<PromptLibrary>("GET", "/api/prompt-library"),
+  addBlock: (b: { kind: "video" | "image"; category: string; label: string; text: string }) =>
+    req<PromptLibrary>("POST", "/api/prompt-library/blocks", b),
+  deleteBlock: (id: string) => req<PromptLibrary>("DELETE", `/api/prompt-library/blocks/${id}`),
   rescan: () => req<{ added: number }>("POST", "/api/library/rescan"),
 };
 

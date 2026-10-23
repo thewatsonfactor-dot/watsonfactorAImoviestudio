@@ -1,8 +1,9 @@
 import { AlertTriangle, Clapperboard, Dice5, ImagePlus, Lock, Plus, Unlock, UserPlus, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, fmtDuration, orientationOf, timeAgo, type Job, type Upload } from "../lib/api";
+import { api, composePrompt, fmtDuration, orientationOf, timeAgo, type Job, type Picks, type PromptCategory, type Upload } from "../lib/api";
 import { useStudio } from "../lib/store";
 import { Section } from "../components/ui";
+import { PromptBuilder } from "../components/PromptBuilder";
 
 const LS = "wfstudio.image";
 function remember(): Record<string, string> {
@@ -22,6 +23,8 @@ export default function ImagePage() {
   const [busySlot, setBusySlot] = useState<number | null>(null);
   const [dragSlot, setDragSlot] = useState<number | null>(null);
   const [prompt, setPrompt] = useState("");
+  const [picks, setPicks] = useState<Picks>({});
+  const [recipe, setRecipe] = useState<PromptCategory[]>([]);
   // Film stills are landscape; character photos are usually portrait headshots, so the shape
   // deliberately does NOT follow Picture 1. Remembered between visits.
   const [aspect, setAspect] = useState<string>(mem.aspect || "landscape");
@@ -91,7 +94,8 @@ export default function ImagePage() {
   const projectName = newProject !== null ? newProject.trim() : project;
 
   const blocked = !health ? "Can't reach the Studio backend." : health.image?.reason ?? null;
-  const missing = !prompt.trim() ? "Describe the image." : !projectName ? "Pick a project." : null;
+  const fullPrompt = composePrompt(prompt, recipe, picks);
+  const missing = !fullPrompt.trim() ? "Describe the image." : !projectName ? "Pick a project." : null;
   const reason = blocked || missing;
   const needsModels = !!health && !health.image?.ready && (health.image?.present ?? 0) < (health.image?.total ?? 0);
 
@@ -101,7 +105,7 @@ export default function ImagePage() {
     try {
       if (newProject !== null) { await api.addProject(projectName); refreshProjects(); setProject(projectName); setNewProject(null); }
       const job = await api.createImage({
-        prompt, refs: filled.map(r => r.path), aspect: shape, project: projectName, seed: seedLocked ? seed : null,
+        prompt: fullPrompt, refs: filled.map(r => r.path), aspect: shape, project: projectName, seed: seedLocked ? seed : null,
       });
       save({ project: projectName, aspect: shape });
       if (!seedLocked) setSeed(job.seed);
@@ -213,6 +217,15 @@ export default function ImagePage() {
             onChange={e => setPrompt(e.target.value)} />
           <p className="mt-1.5 text-[12px] text-muted">Plain visual description works best — what's in the frame, not instructions.</p>
         </Section>
+
+        <div className="-mt-2 flex flex-col gap-2">
+          <PromptBuilder kind="image" picks={picks} onPicks={setPicks} onLibrary={setRecipe} />
+          {Object.keys(picks).length > 0 && (
+            <p className="rounded-[3px] border border-hairline bg-ground px-3 py-2 text-[12px] leading-relaxed text-ink-2">
+              <span className="eyebrow mr-2">Qwen reads</span>{fullPrompt}
+            </p>
+          )}
+        </div>
 
         <Section label="Shape">
           <div className="seg">

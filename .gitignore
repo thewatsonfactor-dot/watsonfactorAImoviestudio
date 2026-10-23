@@ -3,6 +3,7 @@ data/
 logs/
 studio.db
 studio/config/settings.local.json
+studio/config/prompt_library.local.json
 
 # Python
 backend/.venv/

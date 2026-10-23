@@ -1,8 +1,9 @@
 import { AlertTriangle, ChevronDown, Dice5, ImagePlus, Lock, Plus, RefreshCw, Unlock, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, estimateTokens, fmtDuration, type Forecast, type Upload } from "../lib/api";
+import { api, composePrompt, estimateTokens, fmtDuration, type Forecast, type Picks, type PromptCategory, type Upload } from "../lib/api";
 import { useStudio } from "../lib/store";
 import { Section, StatCard } from "../components/ui";
+import { PromptBuilder } from "../components/PromptBuilder";
 
 const LS = "wfstudio.create";
 function remember(): Record<string, string> {
@@ -19,6 +20,8 @@ export default function Create() {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [picks, setPicks] = useState<Picks>({});
+  const [recipe, setRecipe] = useState<PromptCategory[]>([]);
   const [negative, setNegative] = useState<string | null>(null);
   const [project, setProject] = useState(mem.project || "");
   const [newProject, setNewProject] = useState<string | null>(null);
@@ -91,7 +94,8 @@ export default function Create() {
 
   if (!presets) return <div className="p-10 text-muted">Loading…</div>;
 
-  const tokens = estimateTokens(prompt);
+  const fullPrompt = composePrompt(prompt, recipe, picks);
+  const tokens = estimateTokens(fullPrompt);
   const tokenLevel = tokens > presets.token_limit ? "bad" : tokens >= presets.token_warn ? "warn" : "ok";
   const p = presets.presets[preset];
   const orientation = upload?.orientation || "landscape";
@@ -101,7 +105,7 @@ export default function Create() {
   const projectName = newProject !== null ? newProject.trim() : project;
 
   const blocked = !health ? "Can't reach the Studio backend." : health.blocked_reason;
-  const missing = !upload ? "Drop a keyframe first." : !prompt.trim() ? "Write a motion prompt." :
+  const missing = !upload ? "Drop a keyframe first." : !fullPrompt.trim() ? "Write a motion prompt or pick a camera move." :
     !projectName ? "Pick a project." : null;
   const tooBig = fc?.level === "failed" && !tryAnyway ? "This size ran out of memory here before." : null;
   const reason = blocked || missing || tooBig;
@@ -112,7 +116,7 @@ export default function Create() {
     try {
       if (newProject !== null) { await api.addProject(projectName); refreshProjects(); setProject(projectName); setNewProject(null); }
       const body: Record<string, unknown> = {
-        input_path: upload!.path, prompt, project: projectName, preset, length,
+        input_path: upload!.path, prompt: fullPrompt, project: projectName, preset, length,
         seed: seedLocked ? seed : null,
       };
       if (fc?.level === "failed" && tryAnyway) body.allow_risky = true;
@@ -187,6 +191,15 @@ export default function Create() {
             </p>
           )}
         </Section>
+
+        <div className="-mt-2 flex flex-col gap-2">
+          <PromptBuilder kind="video" picks={picks} onPicks={setPicks} onLibrary={setRecipe} />
+          {Object.keys(picks).length > 0 && (
+            <p className="rounded-[3px] border border-hairline bg-ground px-3 py-2 text-[12px] leading-relaxed text-ink-2">
+              <span className="eyebrow mr-2">Wan reads</span>{fullPrompt}
+            </p>
+          )}
+        </div>
 
         <Section label="Project">
           {newProject === null ? (

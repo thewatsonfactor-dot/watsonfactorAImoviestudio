@@ -95,6 +95,44 @@ def manifest() -> list[dict[str, Any]]:
     return out
 
 
+PROMPT_LIBRARY = CONFIG_DIR / "prompt_library.json"
+PROMPT_LIBRARY_LOCAL = CONFIG_DIR / "prompt_library.local.json"  # Daniel's own blocks (git-ignored)
+
+
+def prompt_library() -> dict[str, Any]:
+    """Shot-recipe dropdowns: the shipped blocks plus Daniel's own, his appended to their category
+    (or to a 'My blocks' category if the one he saved into no longer exists)."""
+    base = _read(PROMPT_LIBRARY)
+    custom = _read(PROMPT_LIBRARY_LOCAL).get("blocks", [])
+    out: dict[str, Any] = {}
+    for kind in ("video", "image"):
+        cats = [{**c, "options": [dict(o) for o in c["options"]]} for c in base.get(kind, [])]
+        by_id = {c["id"]: c for c in cats}
+        for b in custom:
+            if b.get("kind") != kind:
+                continue
+            cat = by_id.get(b.get("category"))
+            if cat is None:
+                cat = by_id.get("mine")
+                if cat is None:
+                    cat = {"id": "mine", "label": "My blocks", "options": []}
+                    cats.append(cat)
+                    by_id["mine"] = cat
+            cat["options"].append({"id": b["id"], "label": b["label"], "text": b["text"],
+                                   "group": "My blocks", "custom": True})
+        out[kind] = cats
+    return out
+
+
+def save_custom_blocks(blocks: list[dict[str, Any]]) -> None:
+    with _lock:
+        PROMPT_LIBRARY_LOCAL.write_text(json.dumps({"blocks": blocks}, indent=2, ensure_ascii=False) + "\n")
+
+
+def custom_blocks() -> list[dict[str, Any]]:
+    return list(_read(PROMPT_LIBRARY_LOCAL).get("blocks", []))
+
+
 def ensure_dirs() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
