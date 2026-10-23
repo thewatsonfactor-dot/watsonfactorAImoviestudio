@@ -70,10 +70,12 @@ export type PromptLibrary = Record<"video" | "image", PromptCategory[]>;
 export type Picks = Record<string, string>; // category id -> block id
 
 /** The prompt the engine actually reads: what the user typed, then each picked block, in category order. */
-export function composePrompt(base: string, cats: PromptCategory[] | undefined, picks: Picks): string {
+export function composePrompt(base: string | string[], cats: PromptCategory[] | undefined, picks: Picks): string {
   const parts: string[] = [];
-  const b = base.trim();
-  if (b) parts.push(/[.!?]$/.test(b) ? b : `${b}.`);
+  for (const raw of Array.isArray(base) ? base : [base]) {
+    const b = raw.trim();
+    if (b) parts.push(/[.!?]$/.test(b) ? b : `${b}.`);
+  }
   for (const c of cats ?? []) {
     const o = c.options.find(x => x.id === picks[c.id]);
     if (o) parts.push(o.text.trim());

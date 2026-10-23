@@ -1,4 +1,4 @@
-import { AlertTriangle, Clapperboard, Dice5, ImagePlus, Lock, Plus, Unlock, UserPlus, X } from "lucide-react";
+import { AlertTriangle, Clapperboard, Copy, Dice5, ImagePlus, Lock, Plus, Unlock, UserPlus, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, composePrompt, fmtDuration, orientationOf, timeAgo, type Job, type Picks, type PromptCategory, type Upload } from "../lib/api";
 import { useStudio } from "../lib/store";
@@ -221,9 +221,13 @@ export default function ImagePage() {
         <div className="-mt-2 flex flex-col gap-2">
           <PromptBuilder kind="image" picks={picks} onPicks={setPicks} onLibrary={setRecipe} />
           {Object.keys(picks).length > 0 && (
-            <p className="rounded-[3px] border border-hairline bg-ground px-3 py-2 text-[12px] leading-relaxed text-ink-2">
-              <span className="eyebrow mr-2">Qwen reads</span>{fullPrompt}
-            </p>
+            <div className="rounded-[3px] border border-hairline bg-ground px-3 py-2">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="eyebrow">Qwen reads</span>
+                <button className="btn btn-ghost px-2 py-0.5 text-[11px]" onClick={() => navigator.clipboard.writeText(fullPrompt).then(() => toast("Prompt copied."))}><Copy size={12} />Copy</button>
+              </div>
+              <p className="text-[12px] leading-relaxed text-ink-2">{fullPrompt}</p>
+            </div>
           )}
         </div>
 

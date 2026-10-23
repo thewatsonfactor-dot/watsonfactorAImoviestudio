@@ -1,4 +1,4 @@
-import { AlertTriangle, ChevronDown, Dice5, ImagePlus, Lock, Plus, RefreshCw, Unlock, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, Copy, Dice5, ImagePlus, Lock, Plus, RefreshCw, Unlock, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, composePrompt, estimateTokens, fmtDuration, type Forecast, type Picks, type PromptCategory, type Upload } from "../lib/api";
 import { useStudio } from "../lib/store";
@@ -21,6 +21,8 @@ export default function Create() {
   const [dragOver, setDragOver] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [picks, setPicks] = useState<Picks>({});
+  const [scene, setScene] = useState({ subject: "", location: "", mood: "" });
+  const [sceneOpen, setSceneOpen] = useState(false);
   const [recipe, setRecipe] = useState<PromptCategory[]>([]);
   const [negative, setNegative] = useState<string | null>(null);
   const [project, setProject] = useState(mem.project || "");
@@ -94,7 +96,9 @@ export default function Create() {
 
   if (!presets) return <div className="p-10 text-muted">Loading…</div>;
 
-  const fullPrompt = composePrompt(prompt, recipe, picks);
+  // Order Wan follows best: who, where, what happens, how it feels, then the camera.
+  const fullPrompt = composePrompt([scene.subject, scene.location, prompt, scene.mood], recipe, picks);
+  const composed = fullPrompt !== prompt.trim();
   const tokens = estimateTokens(fullPrompt);
   const tokenLevel = tokens > presets.token_limit ? "bad" : tokens >= presets.token_warn ? "warn" : "ok";
   const p = presets.presets[preset];
@@ -194,10 +198,33 @@ export default function Create() {
 
         <div className="-mt-2 flex flex-col gap-2">
           <PromptBuilder kind="video" picks={picks} onPicks={setPicks} onLibrary={setRecipe} />
-          {Object.keys(picks).length > 0 && (
-            <p className="rounded-[3px] border border-hairline bg-ground px-3 py-2 text-[12px] leading-relaxed text-ink-2">
-              <span className="eyebrow mr-2">Wan reads</span>{fullPrompt}
-            </p>
+          <div className="card p-4">
+            <button className="flex w-full items-center justify-between text-left" onClick={() => setSceneOpen(o => !o)}>
+              <span className="eyebrow">Scene context · optional{[scene.subject, scene.location, scene.mood].filter(Boolean).length ? ` · ${[scene.subject, scene.location, scene.mood].filter(Boolean).length} filled` : ""}</span>
+              <ChevronDown size={15} className={`text-muted transition-transform ${sceneOpen ? "" : "-rotate-90"}`} />
+            </button>
+            {sceneOpen && (
+              <div className="mt-3 flex flex-col gap-2">
+                <p className="text-[12px] text-muted">Only add what the keyframe doesn't already show — the motion prompt above is the action.</p>
+                {([["subject", "Subject", "e.g. Two men in a standoff, one in a dark suit, one in a leather coat"],
+                   ["location", "Location", "e.g. A narrow rain-soaked alley at night"],
+                   ["mood", "Mood or style", "e.g. Tense, gritty crime thriller, neon noir"]] as const).map(([k, label, ph]) => (
+                  <div key={k}>
+                    <label className="mb-1 block text-[12px] text-muted">{label}</label>
+                    <input className="field text-sm" placeholder={ph} value={scene[k]} onChange={e => setScene(v => ({ ...v, [k]: e.target.value }))} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {composed && fullPrompt && (
+            <div className="rounded-[3px] border border-hairline bg-ground px-3 py-2">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="eyebrow">Wan reads</span>
+                <button className="btn btn-ghost px-2 py-0.5 text-[11px]" onClick={() => navigator.clipboard.writeText(fullPrompt).then(() => toast("Prompt copied."))}><Copy size={12} />Copy</button>
+              </div>
+              <p className="text-[12px] leading-relaxed text-ink-2">{fullPrompt}</p>
+            </div>
           )}
         </div>
 

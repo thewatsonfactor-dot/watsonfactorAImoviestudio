@@ -2,6 +2,7 @@ import { ChevronDown, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, type Picks, type PromptCategory, type PromptLibrary } from "../lib/api";
 import { useStudio } from "../lib/store";
+import { MovePicker } from "./MovePicker";
 
 /** Shot recipe: one dropdown per category; picks are appended to the prompt as sentences.
  *  The parent owns `picks` and composes the final prompt with composePrompt(). */
@@ -57,8 +58,17 @@ export function PromptBuilder({ kind, picks, onPicks, onLibrary }: {
           <button className="btn btn-ghost text-xs" onClick={() => setAdding(a => !a)}><Plus size={13} />Add your own</button>
         </div>
       </div>
+      {kind === "video" && cats.find(c => c.id === "camera") && (
+        <div className="mb-4">
+          <MovePicker options={cats.find(c => c.id === "camera")!.options} value={picks.camera}
+            onChange={id => { const next = { ...picks }; if (id) next.camera = id; else delete next.camera; onPicks(next); }} />
+          {cats.find(c => c.id === "camera")!.options.find(o => o.id === picks.camera)?.custom && (
+            <button className="btn btn-ghost mt-1 text-[11px]" onClick={() => remove("camera", picks.camera!)}><Trash2 size={12} />Delete this move</button>
+          )}
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {cats.map(c => {
+        {cats.filter(c => !(kind === "video" && c.id === "camera")).map(c => {
           const picked = c.options.find(o => o.id === picks[c.id]);
           const groups = [...new Set(c.options.map(o => o.group ?? ""))];
           return (
