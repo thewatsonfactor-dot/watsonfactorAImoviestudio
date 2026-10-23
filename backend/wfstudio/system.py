@@ -115,3 +115,46 @@ def make_thumbnail(video: Path, out: Path) -> bool:
         return out.exists()
     except (OSError, subprocess.SubprocessError):
         return False
+
+
+def extract_last_frame(video: Path, out: Path) -> bool:
+    """Grab a frame near the very end of a clip, to use as the next chain segment's keyframe.
+
+    Seeks 0.3s before end-of-file rather than exactly to it: ffmpeg can return nothing when asked
+    to decode right at EOF, and 0.3s (a handful of frames at 16fps) is close enough to be seamless."""
+    exe = ffmpeg()
+    if not exe:
+        return False
+    try:
+        subprocess.run([exe, "-y", "-loglevel", "error", "-sseof", "-0.3", "-i", str(video),
+                        "-update", "1", "-frames:v", "1", str(out)],
+                       timeout=60, check=True)
+        return out.exists()
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def concat_videos(videos: list[Path], out: Path) -> bool:
+    """Stitch finished chain segments into one clip. They all share codec/resolution/fps
+    (same preset rendered every segment), so this is a stream copy — fast, no re-encode."""
+    exe = ffmpeg()
+    if not exe or not videos:
+        return False
+    import tempfile
+    listfile: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+            for v in videos:
+                f.write(f"file '{v.resolve()}'\n")
+            listfile = f.name
+        subprocess.run([exe, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0",
+                        "-i", listfile, "-c", "copy", str(out)], timeout=180, check=True)
+        return out.exists()
+    except (OSError, subprocess.SubprocessError):
+        return False
+    finally:
+        if listfile:
+            try:
+                Path(listfile).unlink()
+            except OSError:
+                pass

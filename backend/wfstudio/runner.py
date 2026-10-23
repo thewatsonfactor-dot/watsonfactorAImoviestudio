@@ -274,6 +274,8 @@ class Runner:
         label = STAGE_LABELS.get(stage, stage)
         if stage.startswith("sample") and value is not None and maximum:
             label = f"{label} · step {value}/{maximum}"
+        if job.get("chain_total") and job["chain_total"] > 1:
+            label = f"{label} — part {job['chain_index']}/{job['chain_total']}"
         self.live[job["id"]] = {"stage": stage, "label": label, "step": value, "total_steps": maximum,
                                 "percent": round(pct, 1), "elapsed": round(elapsed),
                                 "eta_seconds": round(eta) if eta is not None else None}
@@ -446,8 +448,92 @@ class Runner:
                              thumb_path=str(thumb) if has_thumb else None, sidecar_path=str(sidecar),
                              render_seconds=round(render_seconds, 1))
         self.emit_job(done)
+        if done.get("chain_id"):
+            await self._chain_advance(done)
         self.hub.publish({"type": "library_changed"})
         self.wake()
+
+    async def _chain_advance(self, done: dict[str, Any]) -> None:
+        """A segment of a chained ('Long') render just finished. Queue the next segment with this
+        one's last frame as its keyframe, or — if this was the last segment — stitch every segment
+        into one combined clip. Segments stay visible in the Library on their own (so a broken chain
+        still leaves real, usable clips) until a successful combine hides them in favor of the one
+        stitched result."""
+        chain_id, index, total = done["chain_id"], done["chain_index"], done["chain_total"]
+        if index < total:
+            s = config.settings()
+            frame_dir = Path(s["inputs_dir"]) / "chain"
+            frame_dir.mkdir(parents=True, exist_ok=True)
+            next_frame = frame_dir / f"{chain_id}_{index + 1}.png"
+            ok = await asyncio.to_thread(system.extract_last_frame, Path(done["output_path"]), next_frame)
+            if not ok:
+                log.error("chain %s: couldn't pull the last frame after segment %s — chain stops here, "
+                         "the %d finished segment(s) are still in the Library.", chain_id, done["id"], index)
+                return
+            nxt = {k: done[k] for k in ("project", "prompt", "negative", "preset", "length",
+                                        "width", "height", "frames", "steps", "split", "cfg", "shift", "seed")}
+            nxt.update(input_path=str(next_frame), chain_id=chain_id, chain_index=index + 1,
+                       chain_total=total, parent_id=done["id"], tags=[])
+            self.enqueue(nxt)
+            # Macs don't release swap between renders (Oct 17 findings) — flush it before the next
+            # segment so a 4-segment chain doesn't compound memory pressure a single render wouldn't see.
+            try:
+                await free_engine_memory()
+            except Exception:  # noqa: BLE001 — best-effort; a failed flush shouldn't stop the chain
+                log.warning("free-memory between chain segments failed", exc_info=True)
+            return
+        # Last segment: every piece should be done now — stitch them into one clip in order.
+        segments = db.jobs("chain_id=? AND status='done'", (chain_id,), order="chain_index ASC")
+        if len(segments) != total:
+            log.error("chain %s: only %d of %d segments finished — leaving them as separate clips",
+                      chain_id, len(segments), total)
+            return
+        s = config.settings()
+        first = segments[0]
+        date = datetime.now().strftime("%Y-%m-%d")
+        dest_dir = Path(done["output_path"]).parent
+        combined = dest_dir / f"{date}_{chain_id[:8]}_combined.mp4"
+        ok = await asyncio.to_thread(system.concat_videos,
+                                     [Path(g["output_path"]) for g in segments], combined)
+        if not ok:
+            log.error("chain %s: segments rendered but couldn't be stitched — leaving them as separate "
+                     "clips in the Library.", chain_id)
+            return
+        thumb = combined.with_suffix(".jpg")
+        has_thumb = await asyncio.to_thread(system.make_thumbnail, combined, thumb)
+        total_seconds = sum(g["render_seconds"] or 0 for g in segments)
+        total_frames = sum(g["frames"] or 0 for g in segments)
+        sidecar = combined.with_suffix(".json")
+        meta = {
+            "studio": "Watson Factor AI Studio", "job_id": chain_id, "project": first["project"],
+            "prompt": first["prompt"], "negative": first["negative"], "seed": first["seed"],
+            "preset": first["preset"], "length": first["length"], "frames": total_frames,
+            "width": first["width"], "height": first["height"], "steps": first["steps"],
+            "split": first["split"], "cfg": first["cfg"], "shift": first["shift"],
+            "fps": config.presets()["fps"], "input_image": first["input_path"],
+            "render_seconds": round(total_seconds, 1),
+            "created_at": datetime.fromtimestamp(first["created_at"]).isoformat(timespec="seconds"),
+            "finished_at": datetime.now().isoformat(timespec="seconds"),
+            "models": {m["id"]: m["filename"] for m in config.manifest()},
+            "workflow": s["workflow"], "chain_id": chain_id, "segments": total,
+        }
+        sidecar.write_text(json.dumps(meta, indent=2))
+        row = db.insert_job({
+            "id": chain_id, "created_at": first["created_at"], "started_at": first["started_at"],
+            "finished_at": time.time(), "status": "done", "project": first["project"],
+            "prompt": first["prompt"], "negative": first["negative"], "preset": first["preset"],
+            "length": first["length"], "seed": first["seed"], "width": first["width"],
+            "height": first["height"], "frames": total_frames, "steps": first["steps"],
+            "split": first["split"], "cfg": first["cfg"], "shift": first["shift"],
+            "input_path": first["input_path"], "output_path": str(combined),
+            "thumb_path": str(thumb) if has_thumb else None, "sidecar_path": str(sidecar),
+            "render_seconds": round(total_seconds, 1), "tags": [], "hidden": 0,
+            "chain_id": chain_id, "chain_index": total, "chain_total": total,
+        })
+        for g in segments:
+            db.update_job(g["id"], hidden=1)
+        self.emit_job(row)
+        self.hub.publish({"type": "library_changed"})
 
     @staticmethod
     def _quarantine(dest: Path) -> Path | None:

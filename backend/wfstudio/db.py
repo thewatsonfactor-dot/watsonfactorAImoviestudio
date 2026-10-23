@@ -19,6 +19,7 @@ JOB_COLUMNS = [
     "frames", "steps", "split", "cfg", "shift", "input_path", "prompt_id",
     "output_path", "thumb_path", "sidecar_path", "error", "error_detail",
     "render_seconds", "favorite", "tags", "queue_pos", "parent_id",
+    "chain_id", "chain_index", "chain_total", "hidden",
 ]
 
 SCHEMA = """
@@ -37,11 +38,25 @@ CREATE TABLE IF NOT EXISTS jobs (
     favorite INTEGER DEFAULT 0,
     tags TEXT DEFAULT '[]',
     queue_pos REAL,
-    parent_id TEXT
+    parent_id TEXT,
+    chain_id TEXT,        -- groups the segments of a chained ("Long") render, plus the combined clip
+    chain_index INTEGER,  -- 1-based position of this segment in the chain
+    chain_total INTEGER,  -- segment count the chain was built for
+    hidden INTEGER DEFAULT 0  -- chain segments hide once stitched; the combined clip stays visible
 );
 CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status);
 CREATE TABLE IF NOT EXISTS projects (name TEXT PRIMARY KEY, created_at REAL);
 """
+
+
+def _migrate(c: sqlite3.Connection) -> None:
+    """Add columns an existing jobs table predates. SQLite's ALTER TABLE is additive-only,
+    so this is how a Studio already in use picks up new columns without losing data."""
+    existing = {row[1] for row in c.execute("PRAGMA table_info(jobs)").fetchall()}
+    for col, decl in (("chain_id", "TEXT"), ("chain_index", "INTEGER"),
+                      ("chain_total", "INTEGER"), ("hidden", "INTEGER DEFAULT 0")):
+        if col not in existing:
+            c.execute(f"ALTER TABLE jobs ADD COLUMN {col} {decl}")
 
 
 def conn() -> sqlite3.Connection:
@@ -51,6 +66,7 @@ def conn() -> sqlite3.Connection:
         _conn = sqlite3.connect(config.DATA_DIR / "studio.db", check_same_thread=False)
         _conn.row_factory = sqlite3.Row
         _conn.executescript(SCHEMA)
+        _migrate(_conn)
         _conn.execute("INSERT OR IGNORE INTO projects VALUES (?, ?)",
                       (config.settings()["default_project"], time.time()))
         _conn.commit()
@@ -134,8 +150,11 @@ def avg_render_seconds(preset: str, length: str, n: int = 5) -> float | None:
         rows = conn().execute(
             # Deleted renders still count (people delete good takes too), but never ones marked with an
             # error: a render the engine botched must not teach the Studio that a setting is fast.
+            # Hidden rows are a chained render's individual segments once stitched — excluding them
+            # keeps this an average of real per-length totals, not a mix of segments and combined clips.
             "SELECT render_seconds FROM jobs WHERE status IN ('done','deleted') AND error IS NULL "
-            "AND preset=? AND length=? AND render_seconds IS NOT NULL ORDER BY finished_at DESC LIMIT ?",
+            "AND preset=? AND length=? AND render_seconds IS NOT NULL AND (hidden IS NULL OR hidden=0) "
+            "ORDER BY finished_at DESC LIMIT ?",
             (preset, length, n)).fetchall()
     vals = [r[0] for r in rows]
     return sum(vals) / len(vals) if vals else None

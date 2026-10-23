@@ -183,6 +183,12 @@ def _build_job(j: JobIn) -> dict[str, Any]:
         raise HTTPException(400, f"Unknown quality preset '{j.preset}'")
     if j.length not in p["lengths"]:
         raise HTTPException(400, f"Unknown length '{j.length}'")
+    length_def = p["lengths"][j.length]
+    segments = length_def.get("segments", 1)
+    if segments > 1 and j.preset == "final":
+        raise HTTPException(409, "Long isn't supported with Final yet — chaining four 720p renders back "
+                                 "to back is untested on this Mac and likely to run out of memory. "
+                                 "Use Draft or Standard.")
     src = Path(j.input_path)
     if not src.exists():
         raise HTTPException(400, "The keyframe file is gone — drop it in again.")
@@ -195,16 +201,21 @@ def _build_job(j: JobIn) -> dict[str, Any]:
     steps = j.steps or preset["steps"]
     split = j.split if j.split is not None else preset["split"]
     split = max(1, min(split, steps - 1))
-    return {
+    job = {
         "project": (j.project or s["default_project"]).strip(),
         "prompt": j.prompt.strip(),
         "negative": j.negative if j.negative is not None else p["negative_default"],
         "preset": j.preset, "length": j.length,
         "seed": j.seed if j.seed is not None else runner.new_seed(),
-        "width": w, "height": h, "frames": p["lengths"][j.length]["frames"],
+        "width": w, "height": h, "frames": length_def["frames"],
         "steps": steps, "split": split, "cfg": preset["cfg"], "shift": preset["shift"],
         "input_path": str(src), "parent_id": j.parent_id, "tags": [],
     }
+    if segments > 1:
+        # The first segment of a new chain. The runner queues segments 2..N itself as each one
+        # finishes (extracting the last frame forward), then stitches them into one combined clip.
+        job.update(chain_id=uuid.uuid4().hex[:12], chain_index=1, chain_total=segments)
+    return job
 
 
 def _require_ssd() -> None:
@@ -279,7 +290,9 @@ def queue_order(ids: list[str]) -> dict[str, Any]:
 @app.get("/api/library")
 def library(project: str | None = None, favorites: bool = False, preset: str | None = None,
             q: str | None = None) -> list[dict[str, Any]]:
-    where, params = ["status='done'"], []
+    # A chained ("Long") render's own segments are hidden once stitched into the combined clip,
+    # so the Library shows one finished entry per render, not four.
+    where, params = ["status='done'", "(hidden IS NULL OR hidden=0)"], []
     if project:
         where.append("project=?")
         params.append(project)
@@ -326,6 +339,11 @@ def reroll(job_id: str) -> dict[str, Any]:
         raise HTTPException(400, "The original keyframe is no longer on the SSD.")
     _require_fits(clone, allow_risky=False)
     clone.update(seed=runner.new_seed(), parent_id=j["id"], tags=[])
+    # Re-rolling a combined ("Long") clip restarts the whole chain from the original keyframe —
+    # it must get a fresh chain_id, not the finished chain's stale one.
+    segments = config.presets()["lengths"].get(clone["length"], {}).get("segments", 1)
+    if segments > 1:
+        clone.update(chain_id=uuid.uuid4().hex[:12], chain_index=1, chain_total=segments)
     return engine_runner.view(engine_runner.enqueue(clone))  # type: ignore[return-value]
 
 
