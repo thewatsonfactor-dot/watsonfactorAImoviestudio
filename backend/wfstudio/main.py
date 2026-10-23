@@ -541,10 +541,18 @@ def spa(path: str) -> Any:
     dist = config.FRONTEND_DIST
     if path.startswith("api/") or path.startswith("media/"):
         raise HTTPException(404)
+    # index.html must never be cached: it names the current hashed bundle, so a cached copy keeps
+    # loading the old dashboard after an update (Oct 23 2026: the new Image screen stayed invisible
+    # until a hard reload). Hashed files under assets/ never change, so those can be cached forever.
+    no_cache = {"Cache-Control": "no-cache, must-revalidate"}
     target = (dist / path).resolve()
     if path and target.is_file() and dist.resolve() in target.parents:
+        if target.name == "index.html":
+            return FileResponse(target, headers=no_cache)
+        if target.parent.name == "assets":
+            return FileResponse(target, headers={"Cache-Control": "public, max-age=31536000, immutable"})
         return FileResponse(target)
     index = dist / "index.html"
     if index.exists():
-        return FileResponse(index)
+        return FileResponse(index, headers=no_cache)
     return JSONResponse({"error": "Dashboard not built. Run scripts/install-studio.sh"}, status_code=503)
