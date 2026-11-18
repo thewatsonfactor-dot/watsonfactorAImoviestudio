@@ -37,8 +37,8 @@ Clips from the AI Studio (`Studio_Output/<project>/*.mp4`) work as inputs. They 
 Plug in both drives, then run this once. It reads every video on them and writes nothing to the drives.
 
 ```bash
-ls /Volumes                                    # note the second drive's exact name
-python3 reelcut/reelcut.py library "/Volumes/Watson dev" "/Volumes/<second drive>" --zip
+ls /Volumes                                    # should list "Watson dev" and "BMCP4K"
+python3 reelcut/reelcut.py library "/Volumes/Watson dev" "/Volumes/BMCP4K" --zip
 ```
 
 What you get, in `~/Movies/Reels/library/` on the Mac:
