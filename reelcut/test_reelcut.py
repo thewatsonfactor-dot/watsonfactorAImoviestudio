@@ -160,6 +160,37 @@ def main():
     print(f"{'PASS' if ok else 'FAIL'}  --allow-source-drive writes onto the drive")
     results.append(ok)
 
+    # library: two drives, graded clips by file name and by folder name, a BRAW, read-only
+    extra = vols / "Extra" / "Color Graded"
+    extra.mkdir(parents=True)
+    make_clip(extra / "A010_kitchen.mov", 4, w=1080, h=1920)
+    make_clip(drive / "A003_rooftop_GRADED.mp4", 5)
+    snap = lambda: sorted((str(p), p.stat().st_size, p.stat().st_mtime) for p in vols.rglob("*"))
+    before = snap()
+    lib = tmp / "library"
+    r = rc(["library", str(vols / "T7"), str(vols / "Extra"), "--out", str(lib), "--zip"])
+    import csv as _csv
+    rows = list(_csv.DictReader(open(lib / "catalog.csv"))) if (lib / "catalog.csv").exists() else []
+    by = {row["name"]: row for row in rows}
+    ok = (r.returncode == 0
+          and by.get("A003_rooftop_GRADED.mp4", {}).get("status") == "graded"
+          and by.get("A010_kitchen.mov", {}).get("status") == "graded"
+          and by.get("A001_balcony.mov", {}).get("status") == "ready"
+          and by.get("A002_street.braw", {}).get("status") == "raw"
+          and "._A001_balcony.mov" not in by
+          and (lib / by["A003_rooftop_GRADED.mp4"]["sheet"]).exists()
+          and by["A001_balcony.mov"]["sheet"] == ""
+          and (lib / "library_upload.zip").exists()
+          and snap() == before)
+    print(f"{'PASS' if ok else 'FAIL'}  library catalogs two drives, sheets for graded, drives untouched\n"
+          f"{r.stdout[-400:]}{r.stderr}")
+    results.append(ok)
+
+    r = rc(["library", str(vols / "T7"), "--out", str(vols / "T7" / "lib")])
+    ok = r.returncode == 1 and "drive you're scanning" in r.stderr and not (vols / "T7" / "lib").exists()
+    print(f"{'PASS' if ok else 'FAIL'}  library output onto a scanned drive refused")
+    results.append(ok)
+
     print(f"\n{sum(results)}/{len(results)} passed. Outputs: {out if keep else '(removed)'}")
     if not keep:
         import shutil

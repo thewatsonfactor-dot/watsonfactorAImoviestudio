@@ -16,6 +16,9 @@ Commands (run `python3 reelcut.py <command> -h` for every option):
   vertical  One clip reframed to 9:16 (crop or blurred fill).
   scan    List the video files in a folder (e.g. your external drive) with
           length, size and codec, and flag the ones that need exporting first.
+  library Catalog every clip on one or more drives (graded / other / RAW) into
+          catalog.csv, with a small contact sheet of each graded clip, and
+          optionally zip them to send to Claude. Only reads the drives.
 
 Every export is 1080x1920, 30 fps, H.264 + AAC, faststart: one clean file
 that works as an Instagram Reel and a YouTube Short (no platform watermark).
@@ -580,6 +583,152 @@ def cmd_scan(a: argparse.Namespace) -> None:
     print(f"\n{ready} ready to use, {need_export} need exporting from Resolve first.")
 
 
+DEFAULT_GRADED = r"grad(e|ed|ing)|color|colour|(^|[^a-z])cc([^a-z]|$)|rec ?709|final"
+
+
+def walk_videos(root: Path, depth: int) -> list[Path]:
+    def wanted(p: Path) -> bool:
+        rel = p.relative_to(root).parts
+        # skip hidden folders, the "._" files macOS writes on exFAT, and Resolve caches
+        return (p.suffix.lower() in VIDEO_EXTS and p.is_file() and len(rel) <= depth + 1
+                and not any(x.startswith(".") for x in rel)
+                and not any(x.lower() in {"cachedir", "optimizedmedia", "proxy", "proxies"}
+                            for x in rel[:-1]))
+    return sorted((p for p in root.rglob("*") if wanted(p)), key=lambda p: str(p).lower())
+
+
+def mac_duration(path: Path) -> float | None:
+    """Spotlight's duration for files ffprobe can't open (e.g. BRAW). macOS only."""
+    if not shutil.which("mdls"):
+        return None
+    out = subprocess.run(["mdls", "-raw", "-name", "kMDItemDurationSeconds", str(path)],
+                         capture_output=True, text=True)
+    try:
+        return float(out.stdout.strip())
+    except ValueError:
+        return None
+
+
+def contact_sheet(src: Path, duration: float, out: Path, font: str, frames: int = 12) -> None:
+    """A 4-wide grid of frames with their timestamps: small enough to upload, enough to pick
+    moments from. Reads the clip, writes only `out`."""
+    tiles = []
+    with tempfile.TemporaryDirectory() as td:
+        for i in range(frames):
+            t = duration * (i + 0.5) / frames
+            tile = Path(td) / f"{i:02d}.png"
+            label = f"{int(t // 60)}:{t % 60:04.1f}".replace(":", r"\:")
+            vf = (f"scale=320:320:force_original_aspect_ratio=decrease,"
+                  f"pad=320:320:(ow-iw)/2:(oh-ih)/2:black,"
+                  f"drawtext=fontfile='{esc_path(font)}':text='{label}':fontsize=22:"
+                  f"fontcolor=white:box=1:boxcolor=black@0.6:boxborderw=4:x=6:y=h-th-10")
+            r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t:.2f}", "-i", str(src),
+                                "-frames:v", "1", "-vf", vf, str(tile)],
+                               capture_output=True, text=True)
+            if r.returncode == 0 and tile.exists():
+                tiles.append(tile)
+        if not tiles:
+            raise ReelcutError(f"Couldn't read any frames from {src}")
+        cols = 4
+        rows = (len(tiles) + cols - 1) // cols
+        r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-framerate", "1",
+                            "-pattern_type", "sequence", "-start_number", "0",
+                            "-i", str(Path(td) / "%02d.png"),
+                            "-vf", f"tile={cols}x{rows}:padding=4:color=black",
+                            "-frames:v", "1", "-q:v", "4", str(out)],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            raise ReelcutError(f"Contact sheet failed for {src}: {r.stderr.strip()}")
+
+
+def cmd_library(a: argparse.Namespace) -> None:
+    import csv
+    import re
+    import zipfile
+    from datetime import datetime
+
+    graded_re = re.compile(a.graded_pattern, re.I)
+    out = Path(a.out).expanduser()
+    roots = [Path(d).expanduser() for d in a.drives]
+    for r in roots:
+        if not r.is_dir():
+            mounted = sorted(p.name for p in Path(VOLUMES_ROOT).iterdir()) \
+                if Path(VOLUMES_ROOT).is_dir() else []
+            raise ReelcutError(f"Folder not found: {r}. Drives mounted now: "
+                               f"{', '.join(mounted) or 'none'}")
+        SOURCES.add(str(r))
+    # never write the library onto a drive we're reading from
+    if not ALLOW_SOURCE_DRIVE and drive_of(str(out)) and \
+            any(drive_of(str(r)) == drive_of(str(out)) for r in roots):
+        raise ReelcutError(f"{out} is on a drive you're scanning. Put the library on the Mac, "
+                           f"e.g. ~/Movies/Reels/library")
+    sheets = out / "sheets"
+    sheets.mkdir(parents=True, exist_ok=True)
+    font = pick_font(a.font, FONT_CANDIDATES)
+
+    rows = []
+    counts = {"graded": 0, "ready": 0, "raw": 0, "unreadable": 0}
+    n = 0
+    for root in roots:
+        for f in walk_videos(root, a.depth):
+            n += 1
+            st = f.stat()
+            row = {"id": f"{n:04d}", "drive": drive_of(str(f)) or str(root),
+                   "path": str(f), "name": f.name, "folder": str(f.parent.relative_to(root)),
+                   "ext": f.suffix.lower().lstrip("."), "size_mb": round(st.st_size / 1e6, 1),
+                   "modified": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
+                   "status": "", "seconds": "", "width": "", "height": "", "codec": "",
+                   "sheet": "", "note": ""}
+            graded_name = bool(graded_re.search(f.stem) or graded_re.search(f.parent.name))
+            try:
+                i = probe(str(f))
+                row.update(seconds=round(i["duration"], 1), width=i["width"],
+                           height=i["height"], codec=i["codec"])
+                row["status"] = "graded" if graded_name else "ready"
+            except ReelcutError as e:
+                if f.suffix.lower() in RAW_FORMATS or "ProRes RAW" in str(e):
+                    row["status"] = "raw"
+                    row["note"] = "export from Resolve before cutting"
+                    d = mac_duration(f)
+                    if d:
+                        row["seconds"] = round(d, 1)
+                else:
+                    row["status"] = "unreadable"
+                    row["note"] = str(e)[:120]
+            counts[row["status"]] += 1
+            want_sheet = row["status"] == "graded" or (row["status"] == "ready" and a.all_sheets)
+            if want_sheet and a.sheets and float(row["seconds"] or 0) >= a.min_seconds:
+                sheet = sheets / f"{row['id']}_{f.stem[:60]}.jpg"
+                if not sheet.exists():
+                    try:
+                        contact_sheet(f, float(row["seconds"]), sheet, font)
+                    except ReelcutError as e:
+                        row["note"] = str(e)[:120]
+                if sheet.exists():
+                    row["sheet"] = f"sheets/{sheet.name}"
+            rows.append(row)
+            print(f"{row['status']:<10} {fmt_secs(float(row['seconds'] or 0)):>6}  "
+                  f"{row['size_mb']:>8} MB  {f}", flush=True)
+
+    cat = out / "catalog.csv"
+    with open(cat, "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()) if rows else ["id"])
+        w.writeheader()
+        w.writerows(rows)
+    print(f"\n{n} clips: {counts['graded']} graded, {counts['ready']} other readable, "
+          f"{counts['raw']} RAW (export from Resolve first), {counts['unreadable']} unreadable.")
+    print(f"Catalog: {cat}")
+    if a.sheets:
+        print(f"Contact sheets: {sheets}")
+    if a.zip:
+        z = out / "library_upload.zip"
+        with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.write(cat, "catalog.csv")
+            for s in sorted(sheets.glob("*.jpg")):
+                zf.write(s, f"sheets/{s.name}")
+        print(f"Upload this one file to Claude: {z} ({fmt_size(z.stat().st_size)})")
+
+
 def common(p: argparse.ArgumentParser, music: bool = True) -> None:
     p.add_argument("--hook", help="On-screen hook shown for the first seconds")
     p.add_argument("--hook-secs", type=float, default=2.5)
@@ -670,6 +819,24 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--depth", type=int, default=6, help="How many folders deep to look (default 6)")
     sc.add_argument("--name", help="Only files whose name contains this, e.g. A001")
     sc.set_defaults(func=cmd_scan)
+
+    lb = sub.add_parser("library", help="Catalog every clip on one or more drives, with contact sheets")
+    lb.add_argument("drives", nargs="+", help='e.g. "/Volumes/Watson dev" "/Volumes/Other drive"')
+    lb.add_argument("--out", default="~/Movies/Reels/library",
+                    help="Where the catalog and sheets go (on the Mac, never the drives)")
+    lb.add_argument("--depth", type=int, default=8)
+    lb.add_argument("--graded-pattern", default=DEFAULT_GRADED,
+                    help="Regex that marks a clip (or its folder) as already graded")
+    lb.add_argument("--no-sheets", dest="sheets", action="store_false",
+                    help="Catalog only, no contact sheets")
+    lb.add_argument("--all-sheets", action="store_true",
+                    help="Contact sheets for every readable clip, not only graded ones")
+    lb.add_argument("--min-seconds", type=float, default=3.0)
+    lb.add_argument("--font", help="Font for the timestamps")
+    lb.add_argument("--zip", action="store_true",
+                    help="Also write library_upload.zip (catalog + sheets) to send to Claude")
+    lb.add_argument("--allow-source-drive", action="store_true")
+    lb.set_defaults(func=cmd_library)
 
     args = ap.parse_args(argv)
     global ALLOW_SOURCE_DRIVE

@@ -32,6 +32,27 @@ python3 reelcut/reelcut.py scan "/Volumes/Watson dev" --name twisted  # only nam
 
 Clips from the AI Studio (`Studio_Output/<project>/*.mp4`) work as inputs. They have no sound, so Reelcut adds silence or your `--music` track.
 
+## Catalog all your footage (both drives)
+
+Plug in both drives, then run this once. It reads every video on them and writes nothing to the drives.
+
+```bash
+ls /Volumes                                    # note the second drive's exact name
+python3 reelcut/reelcut.py library "/Volumes/Watson dev" "/Volumes/<second drive>" --zip
+```
+
+What you get, in `~/Movies/Reels/library/` on the Mac:
+
+- `catalog.csv`: one row per clip with its path, length, resolution, size, date and a status:
+  - `graded`: readable, and the file or its folder name says it's graded (grade, graded, color, CC, Rec709, final). These cut straight into Reels.
+  - `ready`: readable but not marked graded (often LOG). It can still be cut; it may look flat.
+  - `raw`: Blackmagic RAW or other camera RAW. Export it from Resolve before cutting.
+  - `unreadable`: anything else ffmpeg can't open.
+- `sheets/`: a small contact sheet for every graded clip, with 12 frames and their timestamps.
+- `library_upload.zip`: the catalog and the sheets in one file. **Send that file to Claude in the chat.** Claude picks the moments and sends back the exact commands to cut them.
+
+Large drives take a while the first time. A second run skips sheets that already exist. Useful options: `--all-sheets` (sheets for `ready` clips too), `--no-sheets` (catalog only, fast), `--graded-pattern "regex"` if your graded files use a different word.
+
 ## This week's Reels
 
 Reel 1 is **Twisted Fate in three parts**: Part 1 Thursday, Part 2 next Tuesday, Part 3 the Saturday after. All three come from one command.
@@ -99,6 +120,7 @@ python3 reelcut/reelcut.py wipe --before log.mp4 --after graded.mp4 \
 | `wipe` | Before/after wipe with a moving divider |
 | `vertical` | One clip reframed to 9:16 (`--fit crop` or `--fit blur`) |
 | `scan` | Lists the videos in a folder or drive, flags RAW files to export first |
+| `library` | Catalogs every clip on one or more drives (graded / ready / RAW), contact sheets, upload zip |
 
 Shared options: `--hook`, `--hook-secs`, `--end-text`, `--end-secs`, `--music`, `--music-volume`, `--font`, `--allow-source-drive`, `--dry-run` (prints the ffmpeg command, writes nothing). Run `python3 reelcut/reelcut.py <command> -h` for the rest.
 
@@ -107,4 +129,4 @@ Shared options: `--hook`, `--hook-secs`, `--end-text`, `--end-secs`, `--music`, 
 - Hooks sit in the top third, clear of Instagram's caption and button area at the bottom.
 - Fonts: Arial Bold for captions and Menlo for the typed prompt, from macOS. Override with `--font` / `--mono-font`.
 - Mark realistic AI footage as AI or altered content when you upload. That's a setting in each app; Reelcut doesn't add a label.
-- Tested on synthetic clips on Linux with ffmpeg 6.1, including a fake external drive (`test_reelcut.py`, 15/15). Not yet run on the Mac Studio or on real footage.
+- Tested on synthetic clips on Linux with ffmpeg 6.1, including a fake external drive (`test_reelcut.py`, 17/17). Not yet run on the Mac Studio or on real footage.
