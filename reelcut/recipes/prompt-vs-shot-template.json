@@ -1,0 +1,22 @@
+{
+  "hook": "I typed this. AI made this.",
+  "end_text": "Full prompt in the comments",
+  "music": "",
+  "shots": [
+    {
+      "prompt": "PASTE the exact prompt for shot 1 here",
+      "clip": "/Users/thewatsonfatter/WatsonFactorAIStudio/Studio_Output/<project>/shot1.mp4",
+      "seconds": 5
+    },
+    {
+      "prompt": "PASTE the exact prompt for shot 2 here",
+      "clip": "/Users/thewatsonfatter/WatsonFactorAIStudio/Studio_Output/<project>/shot2.mp4",
+      "seconds": 5
+    },
+    {
+      "prompt": "PASTE the exact prompt for shot 3 here",
+      "clip": "/Users/thewatsonfatter/WatsonFactorAIStudio/Studio_Output/<project>/shot3.mp4",
+      "seconds": 6
+    }
+  ]
+}

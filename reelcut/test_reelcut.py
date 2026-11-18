@@ -7,6 +7,7 @@
 Needs ffmpeg/ffprobe. Renders nothing from your footage.
 """
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -46,8 +47,8 @@ def check(path, dur, tol=0.25):
     return ok
 
 
-def run(args):
-    r = subprocess.run(RC + args, capture_output=True, text=True)
+def run(args, env=None):
+    r = subprocess.run(RC + args, capture_output=True, text=True, env=env)
     if r.returncode != 0:
         print(r.stdout, r.stderr)
         raise SystemExit(f"reelcut {args[0]} failed")
@@ -87,9 +88,9 @@ def main():
 
     run(["parts", "--input", str(src / "episode.mp4"), "--at", "0:04,0:08",
          "--hooks", "She poured his whiskey. He never checked the bottle.|He found the leak.|",
-         "--end-texts", "Part 2 Saturday|Part 3 next week|", "--out-prefix", str(out / "farola")])
+         "--end-texts", "Part 2 Saturday|Part 3 next week|", "--out-prefix", str(out / "twisted")])
     for n in (1, 2, 3):
-        results.append(check(out / f"farola_part{n}of3.mp4", 4))
+        results.append(check(out / f"twisted_part{n}of3.mp4", 4))
 
     run(["wipe", "--before", str(src / "log.mp4"), "--after", str(src / "graded.mp4"),
          "--hook", "What the Pocket 4K actually records", "--out", str(out / "wipe.mp4")])
@@ -103,6 +104,60 @@ def main():
                        capture_output=True, text=True)
     ok = r.returncode == 1 and "File not found" in r.stderr
     print(f"{'PASS' if ok else 'FAIL'}  missing input -> {r.stderr.strip()}")
+    results.append(ok)
+
+    # external drive: a fake /Volumes/T7 with real clips, a BRAW file and macOS "._" sidecars
+    vols = tmp / "Volumes"
+    drive = vols / "T7" / "Twisted Run" / "Day 1"
+    drive.mkdir(parents=True)
+    make_clip(drive / "A001_balcony.mov", 3)
+    (drive / "A002_street.braw").write_bytes(b"\0" * 4096)
+    (drive / "._A001_balcony.mov").write_bytes(b"\0" * 4096)       # AppleDouble junk on exFAT
+    (vols / "T7" / ".Trashes").mkdir()
+    (vols / "T7" / ".Trashes" / "old.mp4").write_bytes(b"\0")
+    env = {**os.environ, "REELCUT_VOLUMES_ROOT": str(vols)}
+
+    def rc(args):
+        return subprocess.run(RC + args, capture_output=True, text=True, env=env)
+
+    r = rc(["scan", str(vols / "T7")])
+    ok = (r.returncode == 0 and "ok " in r.stdout and "A001_balcony.mov" in r.stdout
+          and "EXPORT" in r.stdout and "Blackmagic RAW" in r.stdout
+          and "._A001" not in r.stdout and ".Trashes" not in r.stdout
+          and "1 ready to use, 1 need exporting" in r.stdout)
+    print(f"{'PASS' if ok else 'FAIL'}  scan external drive\n{r.stdout}{r.stderr}")
+    results.append(ok)
+
+    r = rc(["scan", str(vols / "NotPlugged")])
+    ok = r.returncode == 1 and "Drives mounted now: T7" in r.stderr
+    print(f"{'PASS' if ok else 'FAIL'}  scan missing drive -> {r.stderr.strip()}")
+    results.append(ok)
+
+    r = rc(["vertical", "--input", str(drive / "A002_street.braw"), "--out", str(out / "x.mp4")])
+    ok = r.returncode == 1 and "Blackmagic RAW" in r.stderr and "Resolve" in r.stderr
+    print(f"{'PASS' if ok else 'FAIL'}  braw input -> {r.stderr.strip()}")
+    results.append(ok)
+
+    r = rc(["vertical", "--input", str(drive / "A001_balcony.mov"), "--out", str(drive / "reel.mp4")])
+    ok = r.returncode == 1 and "same drive" in r.stderr and not (drive / "reel.mp4").exists()
+    print(f"{'PASS' if ok else 'FAIL'}  output onto source drive refused -> {r.stderr.strip()}")
+    results.append(ok)
+
+    recipe2 = {"shots": [{"prompt": "Balcony at dusk", "clip": str(drive / "A001_balcony.mov"), "seconds": 2}]}
+    (tmp / "recipe2.json").write_text(json.dumps(recipe2))
+    r = rc(["prompt", "--recipe", str(tmp / "recipe2.json"), "--out", str(vols / "T7" / "p.mp4")])
+    ok = r.returncode == 1 and "same drive" in r.stderr
+    print(f"{'PASS' if ok else 'FAIL'}  prompt output onto source drive refused")
+    results.append(ok)
+
+    r = rc(["vertical", "--input", str(drive / "A001_balcony.mov"), "--out", str(out / "from_drive.mp4")])
+    ok = r.returncode == 0 and check(out / "from_drive.mp4", 3)
+    results.append(ok)
+
+    r = rc(["vertical", "--input", str(drive / "A001_balcony.mov"), "--allow-source-drive",
+            "--out", str(drive / "allowed.mp4")])
+    ok = r.returncode == 0 and (drive / "allowed.mp4").exists()
+    print(f"{'PASS' if ok else 'FAIL'}  --allow-source-drive writes onto the drive")
     results.append(ok)
 
     print(f"\n{sum(results)}/{len(results)} passed. Outputs: {out if keep else '(removed)'}")

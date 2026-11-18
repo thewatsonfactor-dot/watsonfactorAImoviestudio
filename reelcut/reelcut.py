@@ -14,6 +14,8 @@ Commands (run `python3 reelcut.py <command> -h` for every option):
           each labelled "PART 1 / 3" with an optional end card.
   wipe    LOG vs. graded: a wipe from one clip to the other.
   vertical  One clip reframed to 9:16 (crop or blurred fill).
+  scan    List the video files in a folder (e.g. your external drive) with
+          length, size and codec, and flag the ones that need exporting first.
 
 Every export is 1080x1920, 30 fps, H.264 + AAC, faststart: one clean file
 that works as an Instagram Reel and a YouTube Short (no platform watermark).
@@ -22,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -49,6 +52,26 @@ MONO_CANDIDATES = [
 ]
 
 
+# Camera RAW formats ffmpeg can't decode. Export these from Resolve first.
+RAW_FORMATS = {
+    ".braw": "Blackmagic RAW",
+    ".r3d": "RED RAW",
+    ".ari": "ARRIRAW",
+    ".arx": "ARRIRAW",
+    ".crm": "Canon Cinema RAW Light",
+    ".dng": "CinemaDNG",
+}
+RAW_CODECS = {"prores_raw": "ProRes RAW"}
+VIDEO_EXTS = {".mp4", ".mov", ".m4v", ".mxf", ".mkv", ".avi", ".mts", ".m2ts", *RAW_FORMATS}
+EXPORT_HINT = ("export it from DaVinci Resolve first (Deliver page, H.264 or ProRes 422, "
+               "same in and out points) and point Reelcut at the export")
+
+# Where macOS mounts external drives. Overridable only so the tests can fake it.
+VOLUMES_ROOT = os.environ.get("REELCUT_VOLUMES_ROOT", "/Volumes")
+ALLOW_SOURCE_DRIVE = False
+SOURCES: set[str] = set()   # every clip probed in this run, for the source-drive guard
+
+
 class ReelcutError(Exception):
     pass
 
@@ -74,25 +97,67 @@ def pick_font(explicit: str | None, candidates: list[str]) -> str:
 
 def probe(path: str) -> dict:
     if not Path(path).exists():
-        raise ReelcutError(f"File not found: {path}")
+        hint = ""
+        if str(path).startswith(VOLUMES_ROOT + "/"):
+            hint = (" (is the external drive plugged in? `ls /Volumes` shows the drives "
+                    "that are mounted)")
+        raise ReelcutError(f"File not found: {path}{hint}")
+    SOURCES.add(str(path))
+    raw = RAW_FORMATS.get(Path(path).suffix.lower())
+    if raw:
+        raise ReelcutError(f"{path} is {raw}, which ffmpeg can't read: {EXPORT_HINT}.")
     out = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries",
-         "format=duration:stream=codec_type,width,height",
+         "format=duration:stream=codec_type,codec_name,width,height,r_frame_rate",
          "-of", "json", path],
         capture_output=True, text=True)
     if out.returncode != 0:
-        raise ReelcutError(f"ffprobe could not read {path}: {out.stderr.strip()}")
+        raise ReelcutError(f"ffprobe could not read {path}: {out.stderr.strip()}. "
+                           f"If it's camera RAW, {EXPORT_HINT}.")
     data = json.loads(out.stdout)
     streams = data.get("streams", [])
     video = next((s for s in streams if s.get("codec_type") == "video"), None)
     if video is None:
         raise ReelcutError(f"No video stream in {path}")
+    codec = video.get("codec_name") or "unknown"
+    if codec in RAW_CODECS:
+        raise ReelcutError(f"{path} is {RAW_CODECS[codec]}, which ffmpeg can't read: {EXPORT_HINT}.")
     return {
         "duration": float(data.get("format", {}).get("duration") or 0.0),
-        "width": int(video["width"]),
-        "height": int(video["height"]),
+        "width": int(video.get("width") or 0),
+        "height": int(video.get("height") or 0),
         "audio": any(s.get("codec_type") == "audio" for s in streams),
+        "codec": codec,
+        "fps": video.get("r_frame_rate", ""),
     }
+
+
+def drive_of(path: str) -> str | None:
+    """/Volumes/<drive> for a path on an external drive, else None."""
+    try:
+        parts = Path(path).expanduser().resolve().parts
+    except OSError:
+        parts = Path(path).expanduser().absolute().parts
+    root = Path(VOLUMES_ROOT).resolve().parts
+    if len(parts) > len(root) and parts[:len(root)] == root:
+        return str(Path(*parts[:len(root) + 1]))
+    return None
+
+
+def guard_output(ffmpeg_args: list[str], out: str) -> None:
+    """Refuse to write onto the drive the footage is read from, unless allowed."""
+    if ALLOW_SOURCE_DRIVE:
+        return
+    out_drive = drive_of(out)
+    if out_drive is None:
+        return
+    sources = SOURCES | {ffmpeg_args[i + 1] for i, a in enumerate(ffmpeg_args[:-1])
+                         if a == "-i" and Path(ffmpeg_args[i + 1]).exists()}
+    if any(drive_of(src) == out_drive for src in sources):
+        raise ReelcutError(
+            f"{out} is on the same drive as your footage ({out_drive}). Write the Reel "
+            f"somewhere else, e.g. ~/Movies/Reels/, or add --allow-source-drive if you "
+            f"really want it there.")
 
 
 def esc_path(p: str) -> str:
@@ -162,6 +227,7 @@ def run_ffmpeg(args: list[str], out: str, dry: bool) -> None:
            "-preset", "medium", "-crf", "18", "-maxrate", "20M", "-bufsize", "40M",
            "-r", str(FPS), "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
            "-movflags", "+faststart", out]
+    guard_output(args, out)
     if dry:
         print(" ".join(f"'{c}'" if " " in c or ";" in c else c for c in cmd))
         return
@@ -460,6 +526,60 @@ def cmd_vertical(a: argparse.Namespace) -> None:
 
 # ---------------------------------------------------------------- CLI
 
+def fmt_secs(sec: float) -> str:
+    m, s_ = divmod(int(round(sec)), 60)
+    return f"{m}:{s_:02d}"
+
+
+def fmt_size(n: int) -> str:
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            return f"{n:.0f} {unit}" if unit in ("B", "KB") else f"{n:.1f} {unit}"
+        n /= 1024
+    return f"{n:.1f} TB"
+
+
+def cmd_scan(a: argparse.Namespace) -> None:
+    root = Path(a.folder).expanduser()
+    if not root.exists():
+        hint = ""
+        if str(root).startswith(VOLUMES_ROOT):
+            mounted = sorted(p.name for p in Path(VOLUMES_ROOT).iterdir()) \
+                if Path(VOLUMES_ROOT).is_dir() else []
+            hint = f". Drives mounted now: {', '.join(mounted) or 'none'}"
+        raise ReelcutError(f"Folder not found: {root}{hint}")
+    if not root.is_dir():
+        raise ReelcutError(f"Not a folder: {root}")
+
+    def wanted(p: Path) -> bool:
+        rel = p.relative_to(root).parts
+        # skip hidden folders and the "._" sidecar files macOS writes on exFAT drives
+        return (p.suffix.lower() in VIDEO_EXTS and not any(x.startswith(".") for x in rel)
+                and p.is_file() and len(rel) <= a.depth + 1)
+
+    files = sorted((p for p in root.rglob("*") if wanted(p)), key=lambda p: str(p).lower())
+    if a.name:
+        files = [p for p in files if a.name.lower() in p.name.lower()]
+    if not files:
+        print(f"No video files under {root}")
+        return
+    ready = need_export = 0
+    for f in files:
+        size = fmt_size(f.stat().st_size)
+        try:
+            i = probe(str(f))
+            ready += 1
+            print(f"ok      {fmt_secs(i['duration']):>6}  {i['width']}x{i['height']:<5} "
+                  f"{i['codec']:<9} {size:>9}  {f}")
+        except ReelcutError as e:
+            need_export += 1
+            why = RAW_FORMATS.get(f.suffix.lower()) or "can't read"
+            if "ProRes RAW" in str(e):
+                why = "ProRes RAW"
+            print(f"EXPORT  {'':>6}  {why:<20} {size:>9}  {f}")
+    print(f"\n{ready} ready to use, {need_export} need exporting from Resolve first.")
+
+
 def common(p: argparse.ArgumentParser, music: bool = True) -> None:
     p.add_argument("--hook", help="On-screen hook shown for the first seconds")
     p.add_argument("--hook-secs", type=float, default=2.5)
@@ -467,6 +587,8 @@ def common(p: argparse.ArgumentParser, music: bool = True) -> None:
     p.add_argument("--end-secs", type=float, default=1.5)
     p.add_argument("--font", help="Path to a .ttf/.ttc font for captions")
     p.add_argument("--dry-run", action="store_true", help="Print the ffmpeg command, write nothing")
+    p.add_argument("--allow-source-drive", action="store_true",
+                   help="Allow writing onto the same external drive the footage is on")
     if music:
         p.add_argument("--music", help="Audio file to use instead of the clip's sound")
         p.add_argument("--music-volume", type=float, default=1.0)
@@ -493,7 +615,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("prompt", help="Prompt vs. the shot, one or more pairs")
     p.add_argument("--pair", action="append",
                    help='"prompt text::/path/clip.mp4[::seconds]" (repeat for each shot)')
-    p.add_argument("--recipe", help="JSON file with shots (see recipes/farola-prompt-vs-shot.json)")
+    p.add_argument("--recipe", help="JSON file with shots (see recipes/prompt-vs-shot-template.json)")
     p.add_argument("--type-secs", type=float, default=2.2, help="How long the prompt takes to type out")
     p.add_argument("--wrap", type=int, default=38, help="Characters per prompt line")
     p.add_argument("--top-label", help='Small label over the prompt (default "PROMPT")')
@@ -517,7 +639,8 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--end-secs", type=float, default=1.5)
     t.add_argument("--font")
     t.add_argument("--dry-run", action="store_true")
-    t.add_argument("--out-prefix", required=True, help="e.g. out/farola  ->  out/farola_part1of3.mp4")
+    t.add_argument("--allow-source-drive", action="store_true")
+    t.add_argument("--out-prefix", required=True, help="e.g. ~/Movies/Reels/twisted_fate  ->  twisted_fate_part1of3.mp4")
     t.set_defaults(func=cmd_parts)
 
     w = sub.add_parser("wipe", help="LOG vs. graded wipe")
@@ -542,7 +665,15 @@ def main(argv: list[str] | None = None) -> int:
     common(v)
     v.set_defaults(func=cmd_vertical)
 
+    sc = sub.add_parser("scan", help="List video files in a folder and flag ones to export first")
+    sc.add_argument("folder", help='e.g. "/Volumes/Watson dev/Movies"  (run `ls /Volumes` to see drive names)')
+    sc.add_argument("--depth", type=int, default=6, help="How many folders deep to look (default 6)")
+    sc.add_argument("--name", help="Only files whose name contains this, e.g. A001")
+    sc.set_defaults(func=cmd_scan)
+
     args = ap.parse_args(argv)
+    global ALLOW_SOURCE_DRIVE
+    ALLOW_SOURCE_DRIVE = getattr(args, "allow_source_drive", False)
     try:
         need_tools()
         args.func(args)
