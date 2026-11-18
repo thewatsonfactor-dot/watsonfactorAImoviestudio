@@ -1,0 +1,28 @@
+{
+  "name": "Prompt vs. the shot: the wolves short",
+  "project": "wolves",
+  "post": "Sat Dec 5 (Reel 9)",
+  "out": "wolves_prompt_vs_shot",
+  "hook": "I typed this. AI made this.",
+  "end_text": "The full short is coming. Follow",
+  "shots": [
+    {
+      "show": "POV: clawing out of a grave under a full moon.",
+      "still": "Cinematic film still, first-person point of view looking up from inside a fresh open grave at night. Two dirt-covered hands reach up and grip the crumbling earthen edge. A huge full moon above, bare dead tree branches silhouetted against a deep blue night sky. Cold blue moonlight, dark shadows, loose soil falling. Anamorphic lens, film grain, horror atmosphere.",
+      "motion": "The hands strain and pull upward, soil crumbles and slides back down into the grave. Handheld camera, slight shake, slow tilt up toward the moon.",
+      "seconds": 5
+    },
+    {
+      "show": "POV: running through blue-lit woods. Two red-eyed wolves on either side.",
+      "still": "Cinematic film still, first-person point of view sprinting through a dark forest at night, cold blue moonlight cutting through the trees. Two large black wolves with glowing red eyes run alongside, one at the left edge of the frame and one at the right. Motion blur on the tree trunks, low mist on the ground. Anamorphic lens, film grain, horror atmosphere.",
+      "motion": "Fast forward motion through the trees, the wolves keep pace on both sides, handheld camera bobbing with each stride, mist swirling.",
+      "seconds": 5
+    },
+    {
+      "show": "The wolves walk down Front Street. The town comes out to greet them.",
+      "still": "Cinematic film still, wide shot of a small-town main street at night lit by warm porch lights and old street lamps. Two large black wolves walk calmly down the middle of the street. Townspeople stand on their porches and step out smiling to welcome them. Wet pavement reflecting the lights, light fog. Film grain, unsettling calm.",
+      "motion": "The wolves walk slowly toward the camera down the center of the street. Townspeople wave and step off their porches. Slow dolly back, steady camera.",
+      "seconds": 6
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "Shot Like: Villeneuve, but AI",
+  "project": "shot-like-villeneuve",
+  "post": "Sat Dec 19",
+  "out": "villeneuve_ai",
+  "hook": "I asked AI for a Villeneuve shot.",
+  "end_text": "Which director next? Comment below",
+  "shots": [
+    {
+      "show": "A lone figure at the foot of a giant concrete monolith, orange haze. Shot like Denis Villeneuve.",
+      "still": "Cinematic film still, extreme wide shot. A single tiny human figure in a long dark coat stands at the base of an enormous brutalist concrete monolith that fills the frame and rises into thick orange dust haze. Flat empty desert ground, no other people. Muted palette of burnt orange, grey and black, soft diffused light, vast negative space, the figure is very small in the frame. Anamorphic lens, 35mm film grain, symmetrical composition, epic scale.",
+      "motion": "Very slow push-in toward the monolith. The figure stays still. Dust drifts slowly across the frame. Steady camera, no shake.",
+      "seconds": 5
+    },
+    {
+      "show": "Two people on a wet concrete platform, a colossal structure vanishing into fog above them.",
+      "still": "Cinematic film still, low wide angle. Two small figures in dark clothing stand on a wet grey concrete platform. Above them a colossal smooth grey structure rises straight up and disappears into dense white fog. Cold overcast daylight, rain drizzle, reflections on the wet concrete, desaturated blue-grey palette, huge sense of scale. Anamorphic lens, 35mm film grain, minimal composition.",
+      "motion": "Slow tilt up from the two figures to the structure disappearing into the fog. Light rain falls. Steady camera.",
+      "seconds": 5
+    },
+    {
+      "show": "Dawn. One figure crosses a vast salt flat toward a dark sphere hanging over the horizon.",
+      "still": "Cinematic film still, extreme wide shot at dawn. A vast white salt flat stretches to the horizon. A single small figure walks away from camera toward a huge smooth dark sphere floating silently just above the horizon line. Pale pink and grey sky, thin low mist, long soft shadows, perfect stillness. Anamorphic lens, 35mm film grain, centered composition.",
+      "motion": "The figure walks slowly toward the sphere. Mist drifts low across the ground. Camera holds still, then drifts forward very slightly.",
+      "seconds": 5
+    }
+  ]
+}
