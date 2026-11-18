@@ -43,14 +43,14 @@ ls "/Volumes/Watson dev/Movies"
 python3 reelcut/reelcut.py scan "/Volumes/Watson dev" --name twisted
 ```
 
-2. Watch the edit and pick two cut points that each land on a tense frame (for a 1:26 cut, somewhere near 0:28 and 0:57).
-3. Run, with the path `scan` printed and your own cut points and hooks:
+2. The cut points below are for the 1:26 edited version on YouTube: 0:30 lands on her close-up after "Don't do that", 0:58 on her face after "I need you to trust me". If your file on the drive is a different cut, check those two moments and adjust `--at`.
+3. Run, with the path `scan` printed:
 
 ```bash
 python3 reelcut/reelcut.py parts \
   --input "/Volumes/Watson dev/Movies/<folder>/twisted_fate.mov" \
-  --at "0:28,0:57" \
-  --hooks "She didn't see this coming.|<hook for part 2>|<hook for part 3>" \
+  --at "0:30,0:58" \
+  --hooks "She came home late. Again.|What's in the envelope?|Are we still in this together?" \
   --end-texts "Part 2 Tuesday|Part 3 Saturday|Volume 2?" \
   --out-prefix ~/Movies/Reels/twisted_fate
 ```
