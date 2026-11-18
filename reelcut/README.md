@@ -10,7 +10,8 @@ Standalone: it doesn't touch the AI Studio app, its queue or its models. It only
 ```bash
 brew install ffmpeg                 # skip if `ffmpeg -version` already works
 cd ~/WatsonFactorAIStudio           # your clone of this repo
-git fetch origin reelcut && git checkout reelcut
+git fetch origin reelcut
+git checkout origin/reelcut -- reelcut   # copies just the reelcut/ folder; your current branch and work stay as they are
 python3 reelcut/test_reelcut.py     # should end with "8/8 passed"
 ```
 
