@@ -17,13 +17,13 @@ python3 reelcut/test_reelcut.py     # should end with "15/15 passed"
 
 ## Find your footage on the external drive
 
-Your drive mounts at `/Volumes/Watson dev`. The name has a space, so keep it in quotes in every command.
+Your footage drives mount at `/Volumes/WATSON-DEV` and `/Volumes/BMCP4K`. Keep paths in quotes; folder names often have spaces.
 
 ```bash
-ls /Volumes                                         # should list "Watson dev"; if not, plug it in
-ls "/Volumes/Watson dev"                            # the top-level folders on the drive
-python3 reelcut/reelcut.py scan "/Volumes/Watson dev"            # every video on the drive
-python3 reelcut/reelcut.py scan "/Volumes/Watson dev" --name twisted  # only names containing "twisted"
+ls /Volumes                                         # should list "WATSON-DEV"; if not, plug it in
+ls "/Volumes/WATSON-DEV"                            # the top-level folders on the drive
+python3 reelcut/reelcut.py scan "/Volumes/WATSON-DEV"            # every video on the drive
+python3 reelcut/reelcut.py scan "/Volumes/WATSON-DEV" --name twisted  # only names containing "twisted"
 ```
 
 `scan` lists each clip's length, resolution, codec, size and full path, so you can copy the path straight into a command. Lines marked `ok` work as they are. Lines marked `EXPORT` are camera RAW (Blackmagic RAW `.braw`, RED, ARRIRAW, ProRes RAW), which ffmpeg can't read: export those from DaVinci Resolve first (Deliver page, H.264 or ProRes 422) and use the export. Reelcut skips the hidden `._` files macOS leaves on external drives.
@@ -32,13 +32,15 @@ python3 reelcut/reelcut.py scan "/Volumes/Watson dev" --name twisted  # only nam
 
 Clips from the AI Studio (`Studio_Output/<project>/*.mp4`) work as inputs. They have no sound, so Reelcut adds silence or your `--music` track.
 
-## Catalog all your footage (both drives)
+## Catalog all your footage (every drive)
 
-Plug in both drives, then run this once. It reads every video on them and writes nothing to the drives.
+Run it from a fresh copy of the tool, so it works from any folder. It reads every video on the drives and writes nothing to them.
 
 ```bash
-ls /Volumes                                    # should list "Watson dev" and "BMCP4K"
-python3 reelcut/reelcut.py library "/Volumes/Watson dev" "/Volumes/BMCP4K" --zip
+cd ~ && git clone -b reelcut --depth 1 https://github.com/thewatsonfactor-dot/watsonfactorAImoviestudio.git reelcut-tool
+cd ~/reelcut-tool
+ls /Volumes                                    # lists WATSON-DEV, BMCP4K, WFStudio
+python3 reelcut/reelcut.py library "/Volumes/WATSON-DEV" "/Volumes/BMCP4K" "/Volumes/WFStudio" --zip
 ```
 
 What you get, in `~/Movies/Reels/library/` on the Mac:
@@ -60,8 +62,8 @@ Reel 1 is **Twisted Fate in three parts**: Part 1 Thursday, Part 2 next Tuesday,
 1. Find the Twisted Fate edit on the drive (your footage may be under a `Movies` folder there):
 
 ```bash
-ls "/Volumes/Watson dev/Movies"
-python3 reelcut/reelcut.py scan "/Volumes/Watson dev" --name twisted
+ls "/Volumes/WATSON-DEV/Movies"
+python3 reelcut/reelcut.py scan "/Volumes/WATSON-DEV" --name twisted
 ```
 
 2. The cut points below are for the 1:26 edited version on YouTube: 0:30 lands on her close-up after "Don't do that", 0:58 on her face after "I need you to trust me". If your file on the drive is a different cut, check those two moments and adjust `--at`.
@@ -69,7 +71,7 @@ python3 reelcut/reelcut.py scan "/Volumes/Watson dev" --name twisted
 
 ```bash
 python3 reelcut/reelcut.py parts \
-  --input "/Volumes/Watson dev/Movies/<folder>/twisted_fate.mov" \
+  --input "/Volumes/WATSON-DEV/Movies/<folder>/twisted_fate.mov" \
   --at "0:30,0:58" \
   --hooks "She came home late. Again.|What's in the envelope?|Are we still in this together?" \
   --end-texts "Part 2 Tuesday|Part 3 Saturday|Volume 2?" \
@@ -82,8 +84,8 @@ That writes `twisted_fate_part1of3.mp4`, `twisted_fate_part2of3.mp4` and `twiste
 
 ```bash
 python3 reelcut/reelcut.py stack \
-  --top "/Volumes/Watson dev/Movies/<folder>/final_shot.mov" \
-  --bottom "/Volumes/Watson dev/Movies/<folder>/phone_bts.mp4" \
+  --top "/Volumes/WATSON-DEV/Movies/<folder>/final_shot.mov" \
+  --bottom "/Volumes/WATSON-DEV/Movies/<folder>/phone_bts.mp4" \
   --top-label "THE SHOT" --bottom-label "THE SETUP" \
   --hook "Same camera. No crew. Pitch black room." \
   --duration 12 \

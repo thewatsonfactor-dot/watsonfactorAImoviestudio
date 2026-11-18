@@ -815,13 +815,13 @@ def main(argv: list[str] | None = None) -> int:
     v.set_defaults(func=cmd_vertical)
 
     sc = sub.add_parser("scan", help="List video files in a folder and flag ones to export first")
-    sc.add_argument("folder", help='e.g. "/Volumes/Watson dev/Movies"  (run `ls /Volumes` to see drive names)')
+    sc.add_argument("folder", help='e.g. "/Volumes/WATSON-DEV/Movies"  (run `ls /Volumes` to see drive names)')
     sc.add_argument("--depth", type=int, default=6, help="How many folders deep to look (default 6)")
     sc.add_argument("--name", help="Only files whose name contains this, e.g. A001")
     sc.set_defaults(func=cmd_scan)
 
     lb = sub.add_parser("library", help="Catalog every clip on one or more drives, with contact sheets")
-    lb.add_argument("drives", nargs="+", help='e.g. "/Volumes/Watson dev" "/Volumes/Other drive"')
+    lb.add_argument("drives", nargs="+", help='e.g. "/Volumes/WATSON-DEV" "/Volumes/Other drive"')
     lb.add_argument("--out", default="~/Movies/Reels/library",
                     help="Where the catalog and sheets go (on the Mac, never the drives)")
     lb.add_argument("--depth", type=int, default=8)
