@@ -73,7 +73,7 @@ python3 reelcut/reelcut.py scan "/Volumes/WATSON-DEV" --name twisted
 python3 reelcut/reelcut.py parts \
   --input "/Volumes/WATSON-DEV/Movies/<folder>/twisted_fate.mov" \
   --at "0:30,0:58" \
-  --hooks "She came home late. Again.|What's in the envelope?|Are we still in this together?" \
+  --hooks "She came home late. Again.|"I need you to trust me."|Are we still in this together?" \
   --end-texts "Part 2 Tuesday|Part 3 Saturday|Volume 2?" \
   --out-prefix ~/Movies/Reels/twisted_fate
 ```
