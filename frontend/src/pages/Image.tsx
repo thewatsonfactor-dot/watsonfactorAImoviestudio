@@ -4,6 +4,7 @@ import { api, composePrompt, fmtDuration, orientationOf, timeAgo, type Job, type
 import { useStudio } from "../lib/store";
 import { Section } from "../components/ui";
 import { PromptBuilder } from "../components/PromptBuilder";
+import { LensPanel } from "../components/LensPanel";
 
 const LS = "wfstudio.image";
 function remember(): Record<string, string> {
@@ -14,7 +15,7 @@ function save(v: Record<string, string>) {
 }
 
 type Ref = Pick<Upload, "path" | "url" | "width" | "height" | "orientation">;
-const SHAPES: [string, string][] = [["landscape", "Landscape"], ["portrait", "Portrait"], ["square", "Square"]];
+const SHAPES: [string, string][] = [["landscape", "Landscape"], ["portrait", "Portrait"], ["square", "Square"], ["scope", "Scope 2.39"]];
 
 export default function ImagePage() {
   const { health, presets, projects, refreshProjects, toast, go, draft, setDraft, jobs, queueIds, libraryVersion } = useStudio();
@@ -25,6 +26,7 @@ export default function ImagePage() {
   const [prompt, setPrompt] = useState("");
   const [picks, setPicks] = useState<Picks>({});
   const [recipe, setRecipe] = useState<PromptCategory[]>([]);
+  const [lockSuffix, setLockSuffix] = useState("");
   // Film stills are landscape; character photos are usually portrait headshots, so the shape
   // deliberately does NOT follow Picture 1. Remembered between visits.
   const [aspect, setAspect] = useState<string>(mem.aspect || "landscape");
@@ -94,7 +96,7 @@ export default function ImagePage() {
   const projectName = newProject !== null ? newProject.trim() : project;
 
   const blocked = !health ? "Can't reach the Studio backend." : health.image?.reason ?? null;
-  const fullPrompt = composePrompt(prompt, recipe, picks);
+  const fullPrompt = [composePrompt(prompt, recipe, picks), lockSuffix].filter(Boolean).join(" ");
   const missing = !fullPrompt.trim() ? "Describe the image." : !projectName ? "Pick a project." : null;
   const reason = blocked || missing;
   const needsModels = !!health && !health.image?.ready && (health.image?.present ?? 0) < (health.image?.total ?? 0);
@@ -219,8 +221,10 @@ export default function ImagePage() {
         </Section>
 
         <div className="-mt-2 flex flex-col gap-2">
+          <LensPanel kind="image" project={projectName} onFill={setPrompt} onLocks={setLockSuffix} onAspect={a => ip.sizes[a] && setAspect(a)}
+            onAppend={t => setPrompt(x => (x.trim() ? `${x.trim()} ${t}` : t))} />
           <PromptBuilder kind="image" picks={picks} onPicks={setPicks} onLibrary={setRecipe} />
-          {Object.keys(picks).length > 0 && (
+          {(Object.keys(picks).length > 0 || !!lockSuffix) && (
             <div className="rounded-[3px] border border-hairline bg-ground px-3 py-2">
               <div className="mb-1 flex items-center justify-between">
                 <span className="eyebrow">Qwen reads</span>
@@ -233,7 +237,7 @@ export default function ImagePage() {
 
         <Section label="Shape">
           <div className="seg">
-            {SHAPES.map(([k, label]) => {
+            {SHAPES.filter(([k]) => ip.sizes[k]).map(([k, label]) => {
               const [sw, sh] = ip.sizes[k];
               return (
                 <button key={k} aria-pressed={shape === k} onClick={() => setAspect(k)}>
@@ -243,7 +247,7 @@ export default function ImagePage() {
             })}
           </div>
           <p className="mt-1.5 text-[12px] text-muted">
-            Landscape and portrait are 2× the Standard video size, so a still animates without stretching. The shape is the final frame's — reference photos can be any shape.
+            Every shape is 2× its video size, so a still animates without stretching. Scope is the 2.39:1 anamorphic widescreen frame for LENS plates and shots. The shape is the final frame's — reference photos can be any shape.
           </p>
         </Section>
 

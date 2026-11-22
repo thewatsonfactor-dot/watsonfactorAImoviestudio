@@ -4,6 +4,7 @@ import { api, composePrompt, estimateTokens, fmtDuration, type Forecast, type Pi
 import { useStudio } from "../lib/store";
 import { Section, StatCard } from "../components/ui";
 import { PromptBuilder } from "../components/PromptBuilder";
+import { LensPanel } from "../components/LensPanel";
 
 const LS = "wfstudio.create";
 function remember(): Record<string, string> {
@@ -24,6 +25,8 @@ export default function Create() {
   const [scene, setScene] = useState({ subject: "", location: "", mood: "" });
   const [sceneOpen, setSceneOpen] = useState(false);
   const [recipe, setRecipe] = useState<PromptCategory[]>([]);
+  const [lockSuffix, setLockSuffix] = useState("");
+  const [finish, setFinish] = useState("");
   const [negative, setNegative] = useState<string | null>(null);
   const [project, setProject] = useState(mem.project || "");
   const [newProject, setNewProject] = useState<string | null>(null);
@@ -97,7 +100,7 @@ export default function Create() {
   if (!presets) return <div className="p-10 text-muted">Loading…</div>;
 
   // Order Wan follows best: who, where, what happens, how it feels, then the camera.
-  const fullPrompt = composePrompt([scene.subject, scene.location, prompt, scene.mood], recipe, picks);
+  const fullPrompt = [composePrompt([scene.subject, scene.location, prompt, scene.mood], recipe, picks), lockSuffix].filter(Boolean).join(" ");
   const composed = fullPrompt !== prompt.trim();
   const tokens = estimateTokens(fullPrompt);
   const tokenLevel = tokens > presets.token_limit ? "bad" : tokens >= presets.token_warn ? "warn" : "ok";
@@ -124,6 +127,7 @@ export default function Create() {
         seed: seedLocked ? seed : null,
       };
       if (fc?.level === "failed" && tryAnyway) body.allow_risky = true;
+      if (finish) body.finish = finish;
       if (negative !== null) body.negative = negative;
       if (advanced && dims.w && dims.h) { body.width = +dims.w; body.height = +dims.h; }
       if (advanced && steps) body.steps = +steps;
@@ -197,6 +201,8 @@ export default function Create() {
         </Section>
 
         <div className="-mt-2 flex flex-col gap-2">
+          <LensPanel kind="video" project={projectName} onFill={setPrompt} onLocks={setLockSuffix} onFinish={setFinish}
+            onAppend={t => setPrompt(x => (x.trim() ? `${x.trim()} ${t}` : t))} />
           <PromptBuilder kind="video" picks={picks} onPicks={setPicks} onLibrary={setRecipe} />
           <div className="card p-4">
             <button className="flex w-full items-center justify-between text-left" onClick={() => setSceneOpen(o => !o)}>
@@ -294,7 +300,7 @@ export default function Create() {
               <div>
                 <label className="eyebrow mb-1.5 block">Negative prompt</label>
                 <textarea className="field min-h-[70px] text-sm" value={negative ?? presets.negative_default} onChange={e => setNegative(e.target.value)} />
-                <p className="mt-1 text-[12px] text-muted">Has little effect at the 4-step speed settings (CFG 1), which every preset uses.</p>
+                <p className="mt-1 text-[12px] text-muted">Ignored at the 4-step speed settings (CFG 1), which every preset uses. To keep the CGI look out, say it in the prompt: the LENS Realism lock does that for you.</p>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>

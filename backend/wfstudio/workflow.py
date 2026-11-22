@@ -69,12 +69,17 @@ def output_node(name: str) -> str | None:
 
 def dimensions(orientation: str, tier: str) -> tuple[int, int]:
     tiers = config.presets()["tiers"]
-    w, h = tiers[tier][orientation]
+    sizes = tiers[tier]
+    w, h = sizes.get(orientation) or sizes["landscape"]
     return int(w), int(h)
 
 
 def orientation_for(width: int, height: int) -> str:
+    """landscape | portrait | square | scope. Scope is the 2.39:1 widescreen frame: a keyframe
+    that wide renders at the scope size instead of being squeezed into 16:9."""
     ratio = width / max(height, 1)
+    if ratio >= 2.0:
+        return "scope"
     if ratio > 1.15:
         return "landscape"
     if ratio < 0.87:

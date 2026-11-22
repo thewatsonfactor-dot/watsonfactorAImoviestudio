@@ -467,6 +467,13 @@ class Runner:
             log.warning("job %s rejected: %s", cur["id"], detail)
             self._fail(cur, guards.GPU_ERROR_MESSAGE if gpu else guards.BLANK_MESSAGE, detail)
             return
+        # The finish runs only after the guards have passed (grain would hide a blank gray video from
+        # the flat-frame check), and never on a chain segment: its last frame becomes the next
+        # segment's keyframe, and grain baked into a keyframe compounds. A chain gets its finish once,
+        # on the combined clip.
+        finish = cur.get("finish") or ""
+        if finish and not cur.get("chain_id"):
+            finish = finish if await self._apply_finish(dest, finish) else ""
         thumb = dest.with_suffix(".jpg")
         has_thumb = await asyncio.to_thread(system.make_thumbnail, dest, thumb)
         render_seconds = finished - (cur["started_at"] or finished)
@@ -482,6 +489,7 @@ class Runner:
             "finished_at": datetime.fromtimestamp(finished).isoformat(timespec="seconds"),
             "models": {m["id"]: m["filename"] for m in config.manifest()},
             "workflow": s["workflow"], "parent_id": cur.get("parent_id"),
+            "finish": finish if not cur.get("chain_id") else (cur.get("finish") or ""),
         }
         sidecar.write_text(json.dumps(meta, indent=2))
         self.live.pop(cur["id"], None)
@@ -512,7 +520,8 @@ class Runner:
                          "the %d finished segment(s) are still in the Library.", chain_id, done["id"], index)
                 return
             nxt = {k: done[k] for k in ("project", "prompt", "negative", "preset", "length",
-                                        "width", "height", "frames", "steps", "split", "cfg", "shift", "seed")}
+                                        "width", "height", "frames", "steps", "split", "cfg", "shift", "seed",
+                                        "finish")}
             nxt.update(input_path=str(next_frame), chain_id=chain_id, chain_index=index + 1,
                        chain_total=total, parent_id=done["id"], tags=[])
             self.enqueue(nxt)
@@ -540,6 +549,9 @@ class Runner:
             log.error("chain %s: segments rendered but couldn't be stitched — leaving them as separate "
                      "clips in the Library.", chain_id)
             return
+        finish = first.get("finish") or ""
+        if finish:
+            finish = finish if await self._apply_finish(combined, finish) else ""
         thumb = combined.with_suffix(".jpg")
         has_thumb = await asyncio.to_thread(system.make_thumbnail, combined, thumb)
         total_seconds = sum(g["render_seconds"] or 0 for g in segments)
@@ -556,7 +568,7 @@ class Runner:
             "created_at": datetime.fromtimestamp(first["created_at"]).isoformat(timespec="seconds"),
             "finished_at": datetime.now().isoformat(timespec="seconds"),
             "models": {m["id"]: m["filename"] for m in config.manifest()},
-            "workflow": s["workflow"], "chain_id": chain_id, "segments": total,
+            "workflow": s["workflow"], "chain_id": chain_id, "segments": total, "finish": finish,
         }
         sidecar.write_text(json.dumps(meta, indent=2))
         row = db.insert_job({
@@ -569,7 +581,7 @@ class Runner:
             "input_path": first["input_path"], "output_path": str(combined),
             "thumb_path": str(thumb) if has_thumb else None, "sidecar_path": str(sidecar),
             "render_seconds": round(total_seconds, 1), "tags": [], "hidden": 0,
-            "chain_id": chain_id, "chain_index": total, "chain_total": total,
+            "chain_id": chain_id, "chain_index": total, "chain_total": total, "finish": finish,
         })
         for g in segments:
             db.update_job(g["id"], hidden=1)
@@ -628,6 +640,25 @@ class Runner:
         self.emit_job(done)
         self.hub.publish({"type": "library_changed"})
         self.wake()
+
+    @staticmethod
+    async def _apply_finish(dest: Path, finish: str) -> bool:
+        """Post pass on a finished clip, in place. The untouched original moves to `.raw/` next to it
+        (no sidecar there, so the Library never lists it twice). On failure the clean clip stays."""
+        if finish != "film":
+            return False
+        raw_dir = dest.parent / ".raw"
+        raw_dir.mkdir(exist_ok=True)
+        raw = raw_dir / dest.name
+        tmp = dest.with_name(dest.stem + ".finish" + dest.suffix)
+        ok = await asyncio.to_thread(system.film_finish, dest, tmp)
+        if not ok:
+            log.warning("film finish failed for %s; keeping the clean render", dest)
+            tmp.unlink(missing_ok=True)
+            return False
+        dest.replace(raw)
+        tmp.replace(dest)
+        return True
 
     @staticmethod
     def _quarantine(dest: Path) -> Path | None:

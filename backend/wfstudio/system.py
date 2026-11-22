@@ -160,6 +160,31 @@ def concat_videos(videos: list[Path], out: Path) -> bool:
                 pass
 
 
+# Film grain for the "film" finish: temporal luma noise (changes every frame, like real stock, and
+# leaves colour alone), at a strength that reads as 35mm on a phone without looking like static.
+FILM_GRAIN_FILTER = "noise=c0s=9:c0f=t+u,format=yuv420p"
+
+
+def film_finish(src: Path, out: Path) -> bool:
+    """Re-encode a finished clip with organic film grain. Encodes with x264 at high quality; falls
+    back to Apple's hardware encoder when this ffmpeg has no x264. Returns False (and leaves `src`
+    untouched) on any failure, so a missing encoder never costs a render."""
+    exe = ffmpeg()
+    if not exe:
+        return False
+    for codec in (["-c:v", "libx264", "-crf", "16", "-preset", "slow"],
+                  ["-c:v", "h264_videotoolbox", "-b:v", "12M"]):
+        try:
+            subprocess.run([exe, "-y", "-loglevel", "error", "-i", str(src), "-vf", FILM_GRAIN_FILTER,
+                            *codec, "-movflags", "+faststart", "-an", str(out)],
+                           timeout=600, check=True)
+            if out.exists() and out.stat().st_size > 0:
+                return True
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return False
+
+
 def image_thumbnail(image: Path, out: Path) -> bool:
     """640px-wide JPEG of a still, matching make_thumbnail's size for videos."""
     try:
