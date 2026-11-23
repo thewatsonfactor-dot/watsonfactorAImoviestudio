@@ -49,7 +49,28 @@ CREATE TABLE IF NOT EXISTS jobs (
 );
 CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status);
 CREATE TABLE IF NOT EXISTS projects (name TEXT PRIMARY KEY, created_at REAL);
+CREATE TABLE IF NOT EXISTS takes (
+    id TEXT PRIMARY KEY,
+    created_at REAL, finished_at REAL,
+    status TEXT,                 -- sending | queued | running | done | failed | cancelled | deleted
+    project TEXT, provider TEXT, model TEXT, prompt TEXT,
+    duration INTEGER, resolution TEXT, audio INTEGER DEFAULT 0,
+    frame_path TEXT,             -- the Studio frame sent as frame one (kept as the record of what was sent)
+    source_job_id TEXT, source_time REAL,
+    remote_id TEXT, status_url TEXT, result_url TEXT, cancel_url TEXT,
+    output_path TEXT, thumb_path TEXT, sidecar_path TEXT,
+    est_cost REAL,               -- the Studio's estimate in USD, from cloud.json; the provider's bill is the truth
+    error TEXT, favorite INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS takes_status ON takes(status);
 """
+
+TAKE_COLUMNS = [
+    "id", "created_at", "finished_at", "status", "project", "provider", "model", "prompt",
+    "duration", "resolution", "audio", "frame_path", "source_job_id", "source_time",
+    "remote_id", "status_url", "result_url", "cancel_url", "output_path", "thumb_path",
+    "sidecar_path", "est_cost", "error", "favorite",
+]
 
 
 def _migrate(c: sqlite3.Connection) -> None:
@@ -210,3 +231,65 @@ def stats() -> dict[str, Any]:
                         "WHERE status='done' AND render_seconds IS NOT NULL AND (kind IS NULL OR kind='video') "
                         "ORDER BY finished_at DESC LIMIT 10)").fetchone()[0]
     return {"renders_today": today, "renders_total": total, "avg_render_seconds": avg}
+
+
+# ---------------------------------------------------------------- cloud takes
+def _take(r: sqlite3.Row | None) -> dict[str, Any] | None:
+    if r is None:
+        return None
+    d = dict(r)
+    d["favorite"] = bool(d.get("favorite"))
+    d["audio"] = bool(d.get("audio"))
+    return d
+
+
+def insert_take(take: dict[str, Any]) -> dict[str, Any]:
+    cols = [c for c in TAKE_COLUMNS if c in take]
+    vals = [int(take[c]) if c in ("audio", "favorite") else take[c] for c in cols]
+    with _lock:
+        conn().execute(f"INSERT INTO takes ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", vals)
+        conn().commit()
+        ensure_project(take.get("project") or config.settings()["default_project"])
+    return get_take(take["id"])  # type: ignore[return-value]
+
+
+def update_take(take_id: str, **fields: Any) -> dict[str, Any] | None:
+    fields = {k: v for k, v in fields.items() if k in TAKE_COLUMNS and k != "id"}
+    for k in ("audio", "favorite"):
+        if k in fields:
+            fields[k] = 1 if fields[k] else 0
+    if fields:
+        sets = ",".join(f"{k}=?" for k in fields)
+        with _lock:
+            conn().execute(f"UPDATE takes SET {sets} WHERE id=?", [*fields.values(), take_id])
+            conn().commit()
+    return get_take(take_id)
+
+
+def get_take(take_id: str) -> dict[str, Any] | None:
+    with _lock:
+        return _take(conn().execute("SELECT * FROM takes WHERE id=?", (take_id,)).fetchone())
+
+
+def takes(where: str = "1=1", params: tuple = (), limit: int = 500) -> list[dict[str, Any]]:
+    with _lock:
+        rows = conn().execute(f"SELECT * FROM takes WHERE {where} ORDER BY created_at DESC LIMIT {int(limit)}",
+                              params).fetchall()
+    return [_take(r) for r in rows]  # type: ignore[misc]
+
+
+def take_spend() -> dict[str, Any]:
+    """Estimated spend on finished and in-flight takes: today, this calendar month and in all.
+    Failed and cancelled takes are left out (providers say they don't bill those; the bill is the truth)."""
+    import datetime as _dt
+    today = _dt.date.today()
+    day = time.mktime(today.timetuple())
+    month = time.mktime(today.replace(day=1).timetuple())
+    billed = "status IN ('done','deleted','sending','queued','running')"
+    with _lock:
+        c = conn()
+        q = lambda extra, p=(): c.execute(  # noqa: E731
+            f"SELECT COALESCE(SUM(est_cost),0), COUNT(*) FROM takes WHERE {billed} {extra}", p).fetchone()
+        t, m, a = q("AND created_at>=?", (day,)), q("AND created_at>=?", (month,)), q("")
+    return {"today": round(t[0], 2), "today_takes": t[1], "month": round(m[0], 2), "month_takes": m[1],
+            "total": round(a[0], 2), "total_takes": a[1]}

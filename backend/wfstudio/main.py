@@ -17,13 +17,14 @@ from fastapi.responses import FileResponse, JSONResponse
 from PIL import Image, ImageOps
 from pydantic import BaseModel, Field
 
-from . import config, db, forecast, health, models, runner, system, workflow
+from . import cloud, config, db, forecast, health, models, runner, system, workflow
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("wfstudio")
 
 hub = runner.Hub()
 engine_runner = runner.Runner(hub)
+cloud_shots = cloud.CloudShots(hub)
 
 
 @asynccontextmanager
@@ -31,7 +32,9 @@ async def lifespan(_: FastAPI):
     config.ensure_dirs()
     db.conn()
     engine_runner.start()
+    cloud_shots.start()
     yield
+    await cloud_shots.stop()
     await engine_runner.stop()
 
 
@@ -531,7 +534,12 @@ def rescan() -> dict[str, Any]:
                 meta = json.loads(side.read_text())
             except (OSError, ValueError):
                 continue
-            if meta.get("studio") != "Watson Factor AI Studio" or db.get_job(meta.get("job_id", "")):
+            if meta.get("studio") != "Watson Factor AI Studio":
+                continue
+            if meta.get("kind") == "cloud":
+                added += cloud.restore_take(meta, side)
+                continue
+            if db.get_job(meta.get("job_id", "")):
                 continue
             exts = (".png", ".jpg", ".webp") if meta.get("kind") == "image" else (".mp4", ".webm", ".mkv")
             video = next((side.with_suffix(e) for e in exts if side.with_suffix(e).exists()), None)
@@ -556,6 +564,159 @@ def rescan() -> dict[str, Any]:
             added += 1
     hub.publish({"type": "library_changed"})
     return {"added": added}
+
+
+# ---------------------------------------------------------------- cloud shots (Seedance / Kling via fal or Replicate)
+def _cloud_error(e: Exception) -> HTTPException:
+    return HTTPException(400, str(e))
+
+
+@app.get("/api/cloud")
+def get_cloud() -> dict[str, Any]:
+    c = cloud.catalog()
+    return {"providers": c["providers"], "models": c["models"], "checked": c.get("checked"),
+            "keys": cloud.keys_status(), "spend": db.take_spend()}
+
+
+class KeyIn(BaseModel):
+    provider: str
+    key: str = Field("", max_length=300)
+
+
+@app.put("/api/cloud/keys")
+def put_cloud_key(body: KeyIn) -> dict[str, Any]:
+    try:
+        return cloud.save_key(body.provider, body.key)
+    except cloud.CloudError as e:
+        raise _cloud_error(e)
+
+
+@app.post("/api/cloud/keys/{provider}/test")
+async def test_cloud_key(provider: str) -> dict[str, Any]:
+    """Check a key without spending: Replicate's account endpoint is free to call. fal has no
+    free check, so its key is proven by the first take (a bad key is refused before anything runs)."""
+    if provider != "replicate":
+        return {"ok": None, "message": "fal.ai keys are checked on your first take. A wrong key is refused before anything runs."}
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(cloud._api_url("replicate", "https://api.replicate.com/v1/account"),
+                                 headers=cloud._auth("replicate"))
+    except cloud.CloudError as e:
+        raise _cloud_error(e)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Couldn't reach Replicate: {cloud.redact(e)}")
+    if r.status_code == 200:
+        who = r.json().get("username") or "your account"
+        return {"ok": True, "message": f"Key works ({who})."}
+    return {"ok": False, "message": f"Replicate refused the key ({cloud._explain(r)})."}
+
+
+class FrameIn(BaseModel):
+    job_id: str
+    seconds: float = Field(0.0, ge=0, le=3600)
+
+
+@app.post("/api/cloud/frame")
+def cloud_frame(body: FrameIn) -> dict[str, Any]:
+    """Grab one frame of a Library render (0 s = its opening frame) as the take's first frame."""
+    _require_ssd()
+    j = db.get_job(body.job_id)
+    if not j:
+        raise HTTPException(404, "That render isn't in the Library.")
+    try:
+        dest = cloud.frame_from_job(j, body.seconds)
+    except cloud.CloudError as e:
+        raise _cloud_error(e)
+    s = config.settings()
+    with Image.open(dest) as im:
+        w, h = im.size
+    return {"path": str(dest), "width": w, "height": h, "orientation": workflow.orientation_for(w, h),
+            "url": f"/media/inputs/{dest.relative_to(s['inputs_dir']).as_posix()}"}
+
+
+class TakeIn(BaseModel):
+    project: str = Field(..., min_length=1, max_length=80)
+    provider: str
+    model: str
+    prompt: str = Field(..., max_length=2500)
+    duration: int
+    resolution: str
+    audio: bool = False
+    frame_path: str
+    confirmed_cost: float = Field(..., ge=0)
+    source_job_id: str | None = None
+    source_time: float | None = None
+
+
+@app.get("/api/takes")
+def list_takes(project: str | None = None, favorites: bool = False) -> list[dict[str, Any]]:
+    where, params = ["status != 'deleted'"], []
+    if project:
+        where.append("project=?")
+        params.append(project)
+    if favorites:
+        where.append("favorite=1")
+    return [cloud_shots.view(t) for t in db.takes(" AND ".join(where), tuple(params))]  # type: ignore[misc]
+
+
+@app.get("/api/takes/spend")
+def takes_spend() -> dict[str, Any]:
+    return db.take_spend()
+
+
+@app.post("/api/takes")
+async def create_take(body: TakeIn) -> dict[str, Any]:
+    _require_ssd()
+    try:
+        t = cloud_shots.create(**body.model_dump())
+    except cloud.CloudError as e:
+        raise _cloud_error(e)
+    return cloud_shots.view(t)  # type: ignore[return-value]
+
+
+@app.post("/api/takes/{take_id}/cancel")
+async def cancel_take(take_id: str) -> dict[str, Any]:
+    t = await cloud_shots.cancel(take_id)
+    if not t:
+        raise HTTPException(404)
+    return cloud_shots.view(t)  # type: ignore[return-value]
+
+
+@app.post("/api/takes/{take_id}/favorite")
+def favorite_take(take_id: str, body: FavIn) -> dict[str, Any]:
+    t = db.update_take(take_id, favorite=body.favorite)
+    if not t:
+        raise HTTPException(404)
+    cloud_shots.emit(t)
+    return cloud_shots.view(t)  # type: ignore[return-value]
+
+
+@app.post("/api/takes/{take_id}/delete")
+def delete_take(take_id: str) -> dict[str, Any]:
+    t = db.get_take(take_id)
+    if not t:
+        raise HTTPException(404)
+    if t["status"] in cloud.ACTIVE:
+        raise HTTPException(409, "Stop the take first.")
+    for k in ("output_path", "thumb_path", "sidecar_path"):
+        if t.get(k):
+            try:
+                system.trash(t[k])
+            except Exception:  # noqa: BLE001
+                pass
+    db.update_take(take_id, status="deleted")
+    return {"ok": True}
+
+
+@app.post("/api/takes/{take_id}/reveal")
+def reveal_take(take_id: str) -> dict[str, Any]:
+    t = db.get_take(take_id)
+    if not t or not t.get("output_path"):
+        raise HTTPException(404)
+    if not system.reveal(t["output_path"]):
+        raise HTTPException(409, "Show in Finder only works on the Mac, with the file on the SSD.")
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------- media

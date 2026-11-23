@@ -1,6 +1,6 @@
-import { Power, RefreshCw, Save } from "lucide-react";
+import { KeyRound, Power, RefreshCw, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { api, type Settings as S } from "../lib/api";
+import { api, type CloudInfo, type ProviderId, type Settings as S } from "../lib/api";
 import { useStudio } from "../lib/store";
 import { Section } from "../components/ui";
 
@@ -99,6 +99,8 @@ export default function Settings() {
           </div>
         </Section>
 
+        <CloudKeys />
+
         <Section label="This Mac">
           <dl className="card grid grid-cols-[110px_1fr] gap-y-2.5 p-5 font-mono text-[12px]">
             {[["Chip", health?.system.chip], ["Memory", health ? `${health.system.memory_gb} GB` : ""], ["macOS", health?.system.os],
@@ -119,5 +121,58 @@ export default function Settings() {
         </Section>
       </div>
     </div>
+  );
+}
+
+/** Cloud keys: pasted here, saved owner-only on this Mac (studio/config/keys.local.json, git-ignored).
+ *  The Studio never shows a saved key again, only its last four characters. */
+function CloudKeys() {
+  const { toast } = useStudio();
+  const [info, setInfo] = useState<CloudInfo | null>(null);
+  const [draft, setDraft] = useState<Record<ProviderId, string>>({ fal: "", replicate: "" });
+  const [busy, setBusy] = useState<ProviderId | null>(null);
+  useEffect(() => { api.cloud().then(setInfo).catch(() => {}); }, []);
+  if (!info) return null;
+
+  const save = async (p: ProviderId, key: string) => {
+    setBusy(p);
+    try {
+      const keys = await api.saveKey(p, key);
+      setInfo(i => (i ? { ...i, keys } : i));
+      setDraft(d => ({ ...d, [p]: "" }));
+      toast(key ? `${info.providers[p].label} key saved on this Mac.` : `${info.providers[p].label} key removed.`);
+    } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(null); }
+  };
+  const test = async (p: ProviderId) => {
+    setBusy(p);
+    try {
+      const r = await api.testKey(p);
+      toast(r.message, r.ok === false ? "error" : r.ok ? "ok" : "info");
+    } catch (e) { toast((e as Error).message, "error"); } finally { setBusy(null); }
+  };
+
+  return (
+    <Section label="Cloud keys">
+      <div className="card flex flex-col gap-5 p-5">
+        <p className="text-sm text-ink-2">For Cloud shots. Each key is saved only on this Mac, never in the project files or logs, and only sent to its own provider.</p>
+        {(Object.keys(info.providers) as ProviderId[]).map(p => {
+          const k = info.keys[p];
+          return (
+            <div key={p} className="flex flex-col gap-1.5">
+              <label className="text-sm text-ink-2">{info.providers[p].label} {k.saved && <span className="ml-1 text-[12px] text-ok">saved {k.hint}</span>}</label>
+              <div className="flex gap-2">
+                <input className="field font-mono" type="password" autoComplete="off" spellCheck={false} value={draft[p]}
+                  placeholder={k.saved ? "Paste a new key to replace it" : "Paste your API key"}
+                  onChange={e => setDraft(d => ({ ...d, [p]: e.target.value }))} />
+                <button className="btn btn-primary" disabled={!draft[p].trim() || busy === p} onClick={() => save(p, draft[p].trim())}><KeyRound size={14} />Save</button>
+                {k.saved && <button className="btn btn-secondary" disabled={busy === p} onClick={() => test(p)}>Test</button>}
+                {k.saved && <button className="btn btn-ghost px-2" disabled={busy === p} title="Remove this key" onClick={() => save(p, "")}><Trash2 size={14} /></button>}
+              </div>
+              <p className="text-[12px] text-muted">{info.providers[p].key_help} <a className="underline" href={info.providers[p].billing_url} target="_blank" rel="noreferrer">Billing and usage</a></p>
+            </div>
+          );
+        })}
+      </div>
+    </Section>
   );
 }

@@ -1,4 +1,4 @@
-import { Clapperboard, Copy, Dice5, FolderSearch, Heart, ImagePlus, Library as LibraryIcon, Search, Trash2, Wand2 } from "lucide-react";
+import { Clapperboard, Cloud, Copy, Dice5, FolderSearch, Heart, ImagePlus, Library as LibraryIcon, Search, Trash2, Wand2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api, fmtDuration, imageDraftFrom, jobTag, orientationOf, timeAgo, type Job } from "../lib/api";
 import { useStudio } from "../lib/store";
@@ -28,6 +28,11 @@ export default function Library() {
   };
 
   const act = {
+    // Cloud shots: this render's opening frame becomes the first frame for Seedance or Kling.
+    cloud: (j: Job) => {
+      setDraft({ kind: "cloud", project: j.project, source: { job_id: j.id, seconds: 0, video_url: j.video_url, kind: j.kind } });
+      go("cloud");
+    },
     favorite: (j: Job) => api.favorite(j.id, !j.favorite).then(patch).catch(e => toast(e.message, "error")),
     reroll: (j: Job) => api.reroll(j.id).then(() => toast(j.kind === "image" ? "Re-roll queued — same prompt and references, new seed." : "Re-roll queued — same shot, new seed.")).catch(e => toast(e.message, "error")),
     // Image → video: copy the still into the keyframe folder and open Create with it.
@@ -129,6 +134,10 @@ export default function Library() {
                   <button className="btn btn-primary" onClick={() => act.animate(open)} title="Open this still in Create as the keyframe"><Clapperboard size={15} />Animate</button>
                   <button className="btn btn-secondary" onClick={() => act.asReference(open)} title="Start a new image with this one as Picture 1"><ImagePlus size={15} />Use as reference</button>
                 </div>
+              )}
+              {open.status === "done" && open.file_exists && (
+                <button className="btn btn-secondary mt-2" onClick={() => act.cloud(open)}
+                  title="Send this render's opening frame to Seedance or Kling as the first frame"><Cloud size={15} />Cloud shot from this</button>
               )}
               <div className="mt-2 grid grid-cols-2 gap-2">
                 <button className={`btn ${open.favorite ? "btn-primary" : "btn-secondary"}`} onClick={() => act.favorite(open)}><Heart size={15} fill={open.favorite ? "currentColor" : "none"} />{open.favorite ? "Favorited" : "Favorite"}</button>

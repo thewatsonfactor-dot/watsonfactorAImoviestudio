@@ -1,11 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, type Health, type Job, type Presets, type Project } from "./api";
+import { api, type Health, type Job, type Presets, type Project, type Take } from "./api";
 
-export type Route = "image" | "create" | "renders" | "library" | "models" | "settings";
+export type Route = "image" | "create" | "cloud" | "renders" | "library" | "models" | "settings";
 export interface Toast { id: number; kind: "ok" | "error" | "info"; text: string }
 export interface Draft {
-  /** "image" drafts are for the Image screen; anything else pre-fills Create. */
-  kind?: "image" | "video";
+  /** "image" drafts are for the Image screen, "cloud" for Cloud shots; anything else pre-fills Create. */
+  kind?: "image" | "video" | "cloud";
+  /** Cloud shots: the Library render to take the first frame from, and where in it (seconds). */
+  source?: { job_id: string; seconds: number; video_url: string | null; kind: string };
   upload?: { path: string; url: string; width: number; height: number; orientation: string };
   refs?: { path: string; url: string; width: number; height: number; orientation: string }[];
   aspect?: string;
@@ -19,6 +21,7 @@ interface Ctx {
   projects: Project[]; refreshProjects: () => void;
   jobs: Record<string, Job>; queueIds: string[]; queueBlocked: string | null;
   libraryVersion: number;
+  takes: Record<string, Take>;
   toasts: Toast[]; toast: (text: string, kind?: Toast["kind"]) => void;
   draft: Draft | null; setDraft: (d: Draft | null) => void;
   connected: boolean;
@@ -36,6 +39,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [queueIds, setQueueIds] = useState<string[]>([]);
   const [queueBlocked, setQueueBlocked] = useState<string | null>(null);
   const [libraryVersion, setLibraryVersion] = useState(0);
+  const [takes, setTakes] = useState<Record<string, Take>>({});
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [connected, setConnected] = useState(false);
@@ -100,6 +104,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
           if (j.status === "done") { refreshPresets(); refreshProjects(); }
         } else if (msg.type === "queue") {
           setQueueIds(msg.ids); setQueueBlocked(msg.blocked_reason);
+        } else if (msg.type === "take" && msg.take) {
+          const t: Take = msg.take;
+          setTakes(prev => ({ ...prev, [t.id]: t }));
         } else if (msg.type === "library_changed") {
           setLibraryVersion(v => v + 1);
         }
@@ -111,9 +118,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Ctx>(() => ({
     route, go, health, refreshHealth, presets, refreshPresets, projects, refreshProjects,
-    jobs, queueIds, queueBlocked, libraryVersion, toasts, toast, draft, setDraft, connected, forget,
+    jobs, queueIds, queueBlocked, libraryVersion, takes, toasts, toast, draft, setDraft, connected, forget,
   }), [route, go, health, refreshHealth, presets, refreshPresets, projects, refreshProjects,
-       jobs, queueIds, queueBlocked, libraryVersion, toasts, toast, draft, connected, forget]);
+       jobs, queueIds, queueBlocked, libraryVersion, takes, toasts, toast, draft, connected, forget]);
 
   return <StudioContext.Provider value={value}>{children}</StudioContext.Provider>;
 }

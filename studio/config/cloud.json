@@ -1,0 +1,89 @@
+{
+  "_about": "Top video models the Studio can send a shot to, through fal.ai or Replicate. Each provider entry maps the Studio's fields onto that provider's own input names. Prices are per second of finished video, in US dollars, for the cost estimate only: the provider's own bill is the truth. Prices and input names were taken from provider pages and price guides on 2026-11-22 and can change; if a provider rejects a shot, its message names the field to fix here.",
+  "checked": "2026-11-22",
+  "providers": {
+    "fal": {
+      "label": "fal.ai",
+      "base": "https://queue.fal.run",
+      "key_help": "fal.ai dashboard > Keys. Starts with a key id and a colon.",
+      "billing_url": "https://fal.ai/dashboard/billing"
+    },
+    "replicate": {
+      "label": "Replicate",
+      "base": "https://api.replicate.com/v1",
+      "key_help": "replicate.com > Account settings > API tokens. Starts with r8_.",
+      "billing_url": "https://replicate.com/account/billing"
+    }
+  },
+  "models": [
+    {
+      "id": "seedance-2.5",
+      "label": "Seedance 2.5",
+      "note": "The cleanest people and product shots in published side-by-side tests. Your frame becomes frame one.",
+      "durations": [5, 8, 10],
+      "default_duration": 5,
+      "resolutions": ["720p", "1080p"],
+      "default_resolution": "1080p",
+      "audio": true,
+      "providers": {
+        "replicate": {
+          "model": "bytedance/seedance-2.5",
+          "image": "image",
+          "prompt": "prompt",
+          "duration": {"key": "duration", "type": "int"},
+          "resolution": {"key": "resolution"},
+          "audio": "generate_audio",
+          "extra": {},
+          "price_per_second": {"720p": 0.24, "1080p": 0.57},
+          "audio_multiplier": 1.0
+        },
+        "fal": {
+          "endpoint": "bytedance/seedance-2.5/image-to-video",
+          "image": "image_url",
+          "prompt": "prompt",
+          "duration": {"key": "duration", "type": "string"},
+          "resolution": {"key": "resolution"},
+          "audio": "generate_audio",
+          "extra": {},
+          "price_per_second": {"720p": 0.48, "1080p": 1.17},
+          "audio_multiplier": 1.0
+        }
+      }
+    },
+    {
+      "id": "kling-3.0",
+      "label": "Kling 3.0",
+      "note": "Close to Seedance on realism, steadier motion, and the cheapest top-tier take. 1080p is Kling's Pro mode.",
+      "durations": [5, 10],
+      "default_duration": 5,
+      "resolutions": ["720p", "1080p"],
+      "default_resolution": "1080p",
+      "audio": true,
+      "providers": {
+        "replicate": {
+          "model": "kwaivgi/kling-v3-video",
+          "image": "start_image",
+          "prompt": "prompt",
+          "duration": {"key": "duration", "type": "int"},
+          "resolution": {"map": {"720p": {"mode": "standard"}, "1080p": {"mode": "pro"}}},
+          "audio": "generate_audio",
+          "extra": {},
+          "price_per_second": {"720p": 0.09, "1080p": 0.12},
+          "audio_multiplier": 1.5
+        },
+        "fal": {
+          "endpoint": "fal-ai/kling-video/v3/pro/image-to-video",
+          "endpoints_by_resolution": {"720p": "fal-ai/kling-video/v3/standard/image-to-video"},
+          "image": "start_image_url",
+          "prompt": "prompt",
+          "duration": {"key": "duration", "type": "string"},
+          "resolution": null,
+          "audio": "generate_audio",
+          "extra": {},
+          "price_per_second": {"720p": 0.09, "1080p": 0.12},
+          "audio_multiplier": 1.5
+        }
+      }
+    }
+  ]
+}

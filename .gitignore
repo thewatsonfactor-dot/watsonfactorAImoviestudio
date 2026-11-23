@@ -21,3 +21,4 @@ launch/icon-preview-32.png
 
 .DS_Store
 frontend/*.tsbuildinfo
+studio/config/keys.local.json

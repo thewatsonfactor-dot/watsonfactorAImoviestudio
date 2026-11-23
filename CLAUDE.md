@@ -51,6 +51,7 @@ cd ../frontend && npm ci && npm run dev     # http://127.0.0.1:5173 (proxies /ap
 | `health.py` | the four status pills and the pre-flight that blocks Generate |
 | `models.py` | manifest check + one-at-a-time Hugging Face downloads |
 | `system.py` | macOS memory pressure, disk, Finder reveal, Trash, ffmpeg thumbnails |
+| `cloud.py` | Cloud shots: Seedance 2.5 / Kling 3.0 through fal.ai or Replicate, local keys, take library |
 | `main.py` | HTTP API, media serving, `/api/ws`, serves `frontend/dist` |
 
 ## Memory findings (Oct 17 2026, 36 GB M4 Max)
@@ -124,3 +125,12 @@ Daniel's renders read as "AI" (his bar is Higgsfield). Research and ranked fixes
 - **Film grain finish:** job field `finish` (`""` | `film`, new DB column via `_migrate`). Runs in `_finalize` only after both guards pass (grain would hide a blank video from the flat-frame check), never on chain segments (their last frame becomes the next keyframe; grain would compound), and once on a chain's combined clip. ffmpeg temporal luma noise, x264 CRF 16, falls back to h264_videotoolbox; on any failure the clean clip stays and the job still succeeds. The clean original moves to `<project>/.raw/` (no sidecar, so rescan ignores it). Sidecar and re-roll carry `finish`.
 - Validated against `dev/mock_comfy.py`: acceptance 11/11 still passes, plus 16 new API checks (locks save/merge, scope keyframe → 960×400, scope forecast ok, grain applied with raw kept, clean job untouched, re-roll keeps finish, Long chain grains only the combined clip, scope still 1920×800). `tsc` + `vite build` clean. **Not run on real hardware and not visually checked in a browser.**
 - **Next on the Mac** (see docs/PHOTOREAL.md): Q4_K_M video models back on, Z-Image Turbo as a second stills workflow, 3-pass sampler template, NAG, RIFE + SeedVR2 post. All unverified on this Mac.
+
+## Cloud shots: Seedance 2.5 and Kling 3.0 (Nov 23 2026, mock-validated)
+Daniel's plan: local frames (the opening frame of a local render, or a still from Image) become the first frame of a 1080p shot on a top closed model. Details in `docs/CLOUD.md`.
+- **Screen:** `frontend/src/pages/Cloud.tsx` ("Cloud shots" in the nav). First frame from the Library (scrub a clip, or "Cloud shot from this" in the Library modal), or an uploaded still; LENS panel for the prompt (look locks appended); model, provider, length, resolution, sound; live estimated cost; a Confirm dialog with the dollar amount before anything is sent; take library below.
+- **Keys:** Settings → Cloud keys. Saved in `studio/config/keys.local.json` (git-ignored, created 0600) or env `WFSTUDIO_FAL_KEY` / `WFSTUDIO_REPLICATE_KEY`. The API only ever returns "saved …last4". Keys go only to `queue.fal.run` / `api.replicate.com` over https; result downloads carry no auth header; `cloud.redact()` scrubs keys from every error and log line. Never log, echo or commit a key.
+- **Spend guard:** `POST /api/takes` needs `confirmed_cost`; the server recomputes the estimate from `studio/config/cloud.json` and refuses if it differs (stale screen). Prices there are estimates checked Nov 22 2026; the provider's bill is the truth.
+- **Provider mapping lives in `studio/config/cloud.json`** (endpoint/model, input key names, duration type, resolution key or map, sound key, extra fields, $/second). Parameter names came from provider docs via search, **not verified with a live call**. If a provider rejects a field, its error text shows on the take card: fix the JSON, no code change.
+- **Takes:** `takes` table in SQLite + a `kind: "cloud"` sidecar next to each MP4 in `Studio_Output/<project>/cloud/` (rescan restores them). Takes in flight resume polling after a restart; give up after 45 min. Status events go out on the websocket as `{"type":"take"}`.
+- Validated with mocked fal and Replicate (`httpx.MockTransport`): 38/38 checks (key file owner-only, key never in responses/sidecars/logs/errors, stale price refused, frame outside the Studio folders refused, both payload shapes, cancel, spend totals, rescan restore, only provider hosts contacted). `tsc` + `vite build` clean. **No paid call has been made; the first one is Daniel's.**

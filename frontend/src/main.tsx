@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { Shell, Toasts } from "./components/Shell";
 import { StudioProvider, useStudio } from "./lib/store";
+import CloudShots from "./pages/Cloud";
 import Create from "./pages/Create";
 import ImagePage from "./pages/Image";
 import Library from "./pages/Library";
@@ -16,6 +17,7 @@ function Router() {
     <Shell>
       {route === "image" && <ImagePage />}
       {route === "create" && <Create />}
+      {route === "cloud" && <CloudShots />}
       {route === "renders" && <Renders />}
       {route === "library" && <Library />}
       {route === "models" && <Models />}

@@ -1,4 +1,4 @@
-import { Clapperboard, Film, HardDrive, ImageIcon, Library, PanelLeftClose, PanelLeftOpen, Settings, Sparkles } from "lucide-react";
+import { Clapperboard, Cloud, Film, HardDrive, ImageIcon, Library, PanelLeftClose, PanelLeftOpen, Settings, Sparkles } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import type { Level, Pill } from "../lib/api";
 import { useStudio, type Route } from "../lib/store";
@@ -6,6 +6,7 @@ import { useStudio, type Route } from "../lib/store";
 const NAV: { id: Route; label: string; icon: typeof Sparkles }[] = [
   { id: "image", label: "Image", icon: ImageIcon },
   { id: "create", label: "Create", icon: Sparkles },
+  { id: "cloud", label: "Cloud shots", icon: Cloud },
   { id: "renders", label: "Renders", icon: Clapperboard },
   { id: "library", label: "Library", icon: Library },
   { id: "models", label: "Models", icon: HardDrive },
@@ -15,6 +16,7 @@ const NAV: { id: Route; label: string; icon: typeof Sparkles }[] = [
 const TITLES: Record<Route, [string, string]> = {
   image: ["Image", "Describe it. Cast it. Make the still."],
   create: ["Create", "Keyframe in. Motion out."],
+  cloud: ["Cloud shots", "Your frame. Top models. Every take logged."],
   renders: ["Renders", "What the engine is working on"],
   library: ["Library", "Every render, by project"],
   models: ["Models", "What the engine needs on the SSD"],
