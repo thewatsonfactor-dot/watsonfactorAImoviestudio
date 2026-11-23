@@ -134,6 +134,20 @@ def extract_last_frame(video: Path, out: Path) -> bool:
         return False
 
 
+def extract_frame(video: Path, seconds: float, out: Path) -> bool:
+    """Grab the frame at `seconds` into the clip (0 = the opening frame), full size, as a still.
+    Seeks after opening the input so the frame is exact rather than the nearest keyframe."""
+    exe = ffmpeg()
+    if not exe:
+        return False
+    try:
+        subprocess.run([exe, "-y", "-loglevel", "error", "-i", str(video), "-ss", f"{max(0.0, seconds):.3f}",
+                        "-frames:v", "1", "-update", "1", str(out)], timeout=60, check=True)
+        return out.exists() and out.stat().st_size > 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
 def concat_videos(videos: list[Path], out: Path) -> bool:
     """Stitch finished chain segments into one clip. They all share codec/resolution/fps
     (same preset rendered every segment), so this is a stream copy — fast, no re-encode."""

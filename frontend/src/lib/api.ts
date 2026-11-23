@@ -90,6 +90,36 @@ export function lockText(lens: Lens | null, locks: LensLocks, kind: "image" | "v
   return out.join(" ");
 }
 
+// ---- Cloud shots: Seedance 2.5 / Kling 3.0 through fal.ai or Replicate (studio/config/cloud.json)
+export type ProviderId = "fal" | "replicate";
+export interface CloudProviderCfg { price_per_second: Record<string, number>; audio_multiplier?: number }
+export interface CloudModel {
+  id: string; label: string; note: string; durations: number[]; default_duration: number;
+  resolutions: string[]; default_resolution: string; audio: boolean; providers: Partial<Record<ProviderId, CloudProviderCfg>>;
+}
+export interface CloudProvider { label: string; key_help: string; billing_url: string }
+export interface Spend { today: number; today_takes: number; month: number; month_takes: number; total: number; total_takes: number }
+export interface CloudInfo {
+  providers: Record<ProviderId, CloudProvider>; models: CloudModel[]; checked: string;
+  keys: Record<ProviderId, { saved: boolean; hint: string | null }>; spend: Spend;
+}
+export type TakeStatus = "sending" | "queued" | "running" | "done" | "failed" | "cancelled";
+export interface Take {
+  id: string; created_at: number; finished_at: number | null; status: TakeStatus; project: string;
+  provider: ProviderId; model: string; prompt: string; duration: number; resolution: string; audio: boolean;
+  frame_path: string; source_job_id: string | null; source_time: number | null; remote_id: string | null;
+  output_path: string | null; est_cost: number; error: string | null; favorite: boolean;
+  video_url: string | null; thumb_url: string | null; frame_url: string | null; file_exists: boolean;
+}
+/** Same arithmetic as the backend's cloud.estimate: price per second x seconds, times the sound multiplier. */
+export function takeCost(m: CloudModel | undefined, provider: ProviderId, duration: number, resolution: string, audio: boolean): number | null {
+  const pc = m?.providers[provider];
+  const per = pc?.price_per_second[resolution];
+  if (per == null) return null;
+  return Math.round(per * duration * (audio ? pc!.audio_multiplier ?? 1 : 1) * 100) / 100;
+}
+export const fmtUSD = (n: number | null | undefined) => (n == null ? "—" : `$${n.toFixed(2)}`);
+
 export interface Forecast {
   level: "ok" | "untested" | "failed"; tokens: number; proven_tokens: number | null; failed_tokens: number | null; message: string;
 }
@@ -183,6 +213,17 @@ export const api = {
   rescan: () => req<{ added: number }>("POST", "/api/library/rescan"),
   lens: () => req<Lens>("GET", "/api/lens"),
   saveLens: (project: string, locks: LensLocks) => req<Lens>("PUT", `/api/lens/projects/${encodeURIComponent(project)}`, locks),
+  cloud: () => req<CloudInfo>("GET", "/api/cloud"),
+  saveKey: (provider: ProviderId, key: string) => req<CloudInfo["keys"]>("PUT", "/api/cloud/keys", { provider, key }),
+  testKey: (provider: ProviderId) => req<{ ok: boolean | null; message: string }>("POST", `/api/cloud/keys/${provider}/test`),
+  grabFrame: (job_id: string, seconds: number) => req<Upload>("POST", "/api/cloud/frame", { job_id, seconds }),
+  takes: (project?: string) => req<Take[]>("GET", `/api/takes${project ? `?project=${encodeURIComponent(project)}` : ""}`),
+  spend: () => req<Spend>("GET", "/api/takes/spend"),
+  sendTake: (body: Record<string, unknown>) => req<Take>("POST", "/api/takes", body),
+  cancelTake: (id: string) => req<Take>("POST", `/api/takes/${id}/cancel`),
+  favoriteTake: (id: string, favorite: boolean) => req<Take>("POST", `/api/takes/${id}/favorite`, { favorite }),
+  deleteTake: (id: string) => req<unknown>("POST", `/api/takes/${id}/delete`),
+  revealTake: (id: string) => req<unknown>("POST", `/api/takes/${id}/reveal`),
 };
 
 /** Rough UMT5 token estimate (English sentencepiece ≈ 1.35 tokens/word). */
