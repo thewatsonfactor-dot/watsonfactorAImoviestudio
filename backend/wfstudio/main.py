@@ -194,6 +194,30 @@ async def upload(file: UploadFile = File(...)) -> dict[str, Any]:
             "url": f"/media/inputs/{dest.relative_to(s['inputs_dir']).as_posix()}"}
 
 
+# ---------------------------------------------------------------- LENS look locks
+@app.get("/api/lens")
+def get_lens() -> dict[str, Any]:
+    return config.lens()
+
+
+class LensLocksIn(BaseModel):
+    realism_on: bool | None = None
+    lens_on: bool | None = None
+    lens_text: str | None = Field(default=None, max_length=1200)
+    lighting_on: bool | None = None
+    lighting_text: str | None = Field(default=None, max_length=1200)
+    shadow_on: bool | None = None
+    finish: str | None = None
+
+
+@app.put("/api/lens/projects/{name}")
+def put_lens_project(name: str, body: LensLocksIn) -> dict[str, Any]:
+    name = name.strip()
+    if not name or len(name) > 60:
+        raise HTTPException(400, "Pick a project first.")
+    return config.save_lens_project(name, body.model_dump(exclude_none=True))
+
+
 # ---------------------------------------------------------------- jobs
 class JobIn(BaseModel):
     input_path: str
@@ -209,6 +233,7 @@ class JobIn(BaseModel):
     split: int | None = None
     parent_id: str | None = None
     allow_risky: bool = False  # "Try anyway" on a size that ran out of memory before
+    finish: str | None = None  # post pass: None/"" clean | "film" (35mm grain)
 
 
 def _build_job(j: JobIn) -> dict[str, Any]:
@@ -244,6 +269,7 @@ def _build_job(j: JobIn) -> dict[str, Any]:
         "width": w, "height": h, "frames": length_def["frames"],
         "steps": steps, "split": split, "cfg": preset["cfg"], "shift": preset["shift"],
         "input_path": str(src), "parent_id": j.parent_id, "tags": [],
+        "finish": j.finish if j.finish in (p.get("finishes") or {}) and j.finish != "none" else "",
     }
     if segments > 1:
         # The first segment of a new chain. The runner queues segments 2..N itself as each one
@@ -282,7 +308,7 @@ def create_job(j: JobIn) -> dict[str, Any]:
 class ImageIn(BaseModel):
     prompt: str = Field(min_length=1)
     refs: list[str] = []          # paths returned by /api/upload, in order: Picture 1, 2, 3
-    aspect: str | None = None     # landscape | portrait | square; default follows the first reference
+    aspect: str | None = None     # landscape | portrait | square | scope; default follows the first reference
     negative: str | None = None
     project: str | None = None
     seed: int | None = None
@@ -306,7 +332,7 @@ def _build_image_job(j: ImageIn) -> dict[str, Any]:
         else:
             aspect = "landscape"
     if aspect not in ip["sizes"]:
-        raise HTTPException(400, f"Unknown shape '{aspect}' — use landscape, portrait or square.")
+        raise HTTPException(400, f"Unknown shape '{aspect}' — use {', '.join(ip['sizes'])}.")
     w, h = ip["sizes"][aspect]
     return {
         "kind": "image", "refs": list(j.refs),
@@ -435,6 +461,7 @@ def reroll(job_id: str) -> dict[str, Any]:
         return engine_runner.view(engine_runner.enqueue(clone))  # type: ignore[return-value]
     clone = {k: j[k] for k in ("project", "prompt", "negative", "preset", "length", "width", "height",
                                "frames", "steps", "split", "cfg", "shift", "input_path")}
+    clone["finish"] = j.get("finish") or ""
     if not Path(clone["input_path"]).exists():
         raise HTTPException(400, "The original keyframe is no longer on the SSD.")
     _require_fits(clone, allow_risky=False)
@@ -524,6 +551,7 @@ def rescan() -> dict[str, Any]:
                 "sidecar_path": str(side), "render_seconds": meta.get("render_seconds"),
                 "parent_id": meta.get("parent_id"), "tags": [],
                 "kind": meta.get("kind", "video"), "refs": meta.get("references", []),
+                "finish": meta.get("finish") or "",
             })
             added += 1
     hub.publish({"type": "library_changed"})

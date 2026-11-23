@@ -1,0 +1,440 @@
+{
+  "_doc": "LENS: the anamorphic blockbuster look, built into the Studio. The image-to-video model copies what it SEES in the keyframe far more than what it READS in the prompt, so the look is baked into the plates (Image screen) and then held with short text locks appended to every prompt. Stage templates fill the prompt box; {field} slots take the user's words or the field's default. Locks are saved per project by the Studio in lens.local.json (git-ignored). Prompts describe the look and never name camera, lens or film brands.",
+  "locks": {
+    "realism": "True-to-life skin with visible pores, fine texture and natural imperfections, real fabric weight and wear, real-world materials. Indistinguishable from a real photograph, no CGI look, no plastic or airbrushed skin, no 3D render or cartoon look.",
+    "realism_video": "Real live-action footage: true-to-life skin texture with pores and natural imperfections, real-world materials, weight and physics. No CGI look, no plastic or airbrushed skin, no 3D animation or cartoon look.",
+    "lens": "2.39:1 widescreen, vintage anamorphic character, elongated vertical oval bokeh, shallow focus with motivated rack focus, soft focus fall-off and a slight bend toward the frame edges, one restrained horizontal lens flare, organic 35mm film grain, no CGI cleanliness.",
+    "shadow_side": "Shoot the shadow side: key light from beyond the subject, camera on the unlit side of the face. High contrast, strong falloff from light to shadow, rim light separating subject from background. Shadows hold texture and faces stay readable, never crushed to black.",
+    "lighting_example": "Hard cold-white key from high camera left raking across the faces, warm tungsten practicals as small accents, strong blue rim from behind, deep shadow on the right side that still holds texture, thin haze catching the light. Never warm sunset, never flat overcast, never lifted shadows."
+  },
+  "lock_help": {
+    "realism": "Kills the plastic AI skin. Goes on everything. At CFG 1 the negative prompt is ignored, so 'no CGI look' has to live in the prompt itself.",
+    "lens": "The lens profile from your location plates, in words. Use on location plates, lighting plates and shots. Off for character sheets.",
+    "lighting": "Describe what your lighting plates share: key source and direction, colour temperatures, contrast, shadow depth, rim, haze, practicals. End with a NEVER line. Reuse it word for word for every shot in this location.",
+    "shadow_side": "Hero close-ups, dialogue, night, interiors, tension. Skip it for comedy, daylight wides and fast action."
+  },
+  "focal": [
+    {
+      "id": "24",
+      "label": "24mm · establishing, about 84°",
+      "text": "24",
+      "note": "Locations and establishing shots. Never on a face."
+    },
+    {
+      "id": "35",
+      "label": "35mm · hero object or depth layers, about 63°",
+      "text": "35",
+      "note": "Location with a hero object or layers of depth."
+    },
+    {
+      "id": "40",
+      "label": "40mm · tight interior, corridor, vehicle, about 57°",
+      "text": "40",
+      "note": "Tight interiors."
+    }
+  ],
+  "stages": [
+    {
+      "id": "character",
+      "label": "1 · Character sheet",
+      "kind": "image",
+      "aspect": "landscape",
+      "locks": [
+        "realism"
+      ],
+      "tips": [
+        "Light sheets evenly. The drama comes from the lighting plates later.",
+        "Generate wide, select narrow: run many seeds, keep the best, lock it.",
+        "One or two generations max. Every chained edit softens the face, and that mush carries into the film.",
+        "Nail the face close-up once; the body panels can take revisions.",
+        "Test the sheet in motion (a Draft render) before you approve it. About half of stills that look fine fall apart in motion.",
+        "Only use a real person's face with their written consent."
+      ],
+      "fields": [
+        {
+          "id": "name",
+          "label": "Name",
+          "placeholder": "e.g. Marco Farola",
+          "default": "the character"
+        },
+        {
+          "id": "who",
+          "label": "Age, build, one-line design signature",
+          "placeholder": "e.g. late 40s, heavy-set, grey stubble, scar through the left eyebrow",
+          "default": "an adult with a distinctive, specific face"
+        },
+        {
+          "id": "items",
+          "label": "Costume details to show",
+          "placeholder": "e.g. worn leather jacket collar, gold ring, scuffed boots",
+          "default": "the key costume pieces"
+        }
+      ],
+      "template": "Character reference sheet of {name}, {who}. Panels on a neutral mid-grey seamless backdrop: full body front, three-quarter, profile, back; one large face close-up panel; costume detail inserts of {items}. Face panel framed like a portrait lens at close distance, body panels like a normal lens. Soft even studio light, true-to-life skin with pores and fine texture, real fabric weight and wear. Identical face, costume and proportions in every panel. Photoreal, no CGI look, no text, no watermark."
+    },
+    {
+      "id": "location",
+      "label": "2 · Anamorphic location plate",
+      "kind": "image",
+      "aspect": "scope",
+      "locks": [
+        "realism",
+        "lighting"
+      ],
+      "tips": [
+        "Pick the lens before the shot: 24mm establishing, 35mm hero object or depth, 40mm tight interiors.",
+        "Write every lens trait as something you can see, named on what it sits on.",
+        "One flare, one source, restrained. A blown-out flare plate can't drive a scene.",
+        "Clean plate, no characters. The cast comes in later."
+      ],
+      "fields": [
+        {
+          "id": "place",
+          "label": "Location in one line",
+          "placeholder": "e.g. a narrow brick alley behind a Texas bar",
+          "default": "the location"
+        },
+        {
+          "id": "mood",
+          "label": "Mood",
+          "placeholder": "e.g. tense, late night",
+          "default": "tense and quiet"
+        },
+        {
+          "id": "height",
+          "label": "Lens height",
+          "options": [
+            "knee height",
+            "waist height",
+            "chest height"
+          ],
+          "default": "waist height"
+        },
+        {
+          "id": "layers",
+          "label": "In frame, foreground to background",
+          "placeholder": "e.g. a puddle and a crate, the back door under a caged bulb, the street glowing at the far end",
+          "default": "a foreground object, the main subject area, and deep background"
+        },
+        {
+          "id": "palette",
+          "label": "Palette (60 / 30 / 10)",
+          "placeholder": "e.g. 60% wet charcoal, 30% sodium orange, 10% cold cyan",
+          "default": "60% deep neutral shadow, 30% warm practical light, 10% cold accent"
+        },
+        {
+          "id": "light",
+          "label": "Light: source, colour, direction, contrast",
+          "placeholder": "e.g. one sodium streetlight high camera right, hard and warm, high contrast",
+          "default": "one motivated hard source from the side, high contrast"
+        },
+        {
+          "id": "focus",
+          "label": "Focus locked on",
+          "placeholder": "e.g. the caged bulb over the back door",
+          "default": "the hero object"
+        },
+        {
+          "id": "distance",
+          "label": "Camera distance from it",
+          "options": [
+            "1",
+            "2",
+            "3"
+          ],
+          "default": "2"
+        },
+        {
+          "id": "fg",
+          "label": "What melts in the foreground",
+          "placeholder": "e.g. the crate",
+          "default": "the foreground"
+        },
+        {
+          "id": "bg",
+          "label": "What dissolves in the background",
+          "placeholder": "e.g. the street at the far end",
+          "default": "the background"
+        },
+        {
+          "id": "bokeh_on",
+          "label": "Bokeh sits on",
+          "placeholder": "e.g. the wet pavement and distant signs",
+          "default": "the distant lights"
+        },
+        {
+          "id": "flare_color",
+          "label": "Flare colour",
+          "options": [
+            "blue",
+            "warm-orange"
+          ],
+          "default": "warm-orange"
+        },
+        {
+          "id": "flare_source",
+          "label": "Flare source",
+          "placeholder": "e.g. the caged bulb",
+          "default": "the brightest practical light"
+        },
+        {
+          "id": "stock",
+          "label": "Film stock",
+          "options": [
+            "tungsten-balanced 500-speed",
+            "daylight-balanced 250-speed"
+          ],
+          "default": "tungsten-balanced 500-speed"
+        },
+        {
+          "id": "focal",
+          "label": "Lens",
+          "options": [
+            "24",
+            "35",
+            "40"
+          ],
+          "default": "35"
+        },
+        {
+          "id": "physics",
+          "label": "Real physics",
+          "placeholder": "e.g. light rain backlit in visible streaks",
+          "default": "thin haze catching the light"
+        }
+      ],
+      "template": "Cinematic film still. {place}, {mood}. Three-quarter angle, camera set to one side looking diagonally into the depth, lens at {height}. In frame, foreground to background: {layers}. Palette: {palette}. Light: {light}. Focus locked on {focus}, camera {distance} m from it, lens wide open; {fg} melts into creamy out-of-focus, {bg} dissolves into soft blur; anamorphic bokeh with elongated vertical oval highlights on {bokeh_on}; one restrained horizontal {flare_color} streak flare off {flare_source}; soft focus fall-off and a slight bend toward the frame edges. Shot on real 35mm film, {stock} colour negative grain, anamorphic {focal}mm lens. Realistic physics: {physics}. Indistinguishable from a real photograph, no CGI look. Clean environment plate, no characters. No text, no watermark, no logo. Aspect ratio 2.39:1."
+    },
+    {
+      "id": "lighting",
+      "label": "3 · Lighting plate",
+      "kind": "image",
+      "aspect": "scope",
+      "locks": [
+        "realism",
+        "lens"
+      ],
+      "tips": [
+        "One dominant key with a clear direction and a hard edge.",
+        "Shoot from the shadow side: key beyond the subject, camera on the unlit side.",
+        "Deep shadow that still holds texture. Crushed black reads as a mistake.",
+        "Also make a sky or world plate, so interiors and exteriors share one light.",
+        "When you have a few plates you like, describe what they share in the project's Lighting lock."
+      ],
+      "fields": [
+        {
+          "id": "place",
+          "label": "Location",
+          "placeholder": "e.g. the bar's back office",
+          "default": "the location"
+        },
+        {
+          "id": "key_temp",
+          "label": "Key colour temperature",
+          "placeholder": "e.g. cold white",
+          "default": "cold white"
+        },
+        {
+          "id": "key_dir",
+          "label": "Key direction",
+          "placeholder": "e.g. high camera left",
+          "default": "high from one side"
+        },
+        {
+          "id": "surfaces",
+          "label": "Raking across",
+          "placeholder": "e.g. the desk, the wood panelling",
+          "default": "the main surfaces"
+        },
+        {
+          "id": "rim_color",
+          "label": "Backlight colour",
+          "placeholder": "e.g. blue",
+          "default": "cool blue"
+        },
+        {
+          "id": "rim_edges",
+          "label": "Rimming",
+          "placeholder": "e.g. the chair and the window frame",
+          "default": "the edges of the set"
+        },
+        {
+          "id": "shadow",
+          "label": "Deep shadow on the",
+          "options": [
+            "left",
+            "right"
+          ],
+          "default": "right"
+        },
+        {
+          "id": "practicals",
+          "label": "Practicals",
+          "placeholder": "e.g. a green banker's lamp, a TV glow",
+          "default": "a lamp and a screen"
+        },
+        {
+          "id": "haze",
+          "label": "Haze or steam",
+          "placeholder": "e.g. cigarette smoke",
+          "default": "thin haze"
+        }
+      ],
+      "template": "Lighting reference plate of {place}. Hard directional {key_temp} key from {key_dir} raking across {surfaces}; strong {rim_color} backlight rimming {rim_edges}; deep shadow on the {shadow} with readable texture; {practicals} as small warm accents; {haze} catching the light in visible shafts. Key from beyond the subject, camera on the shadow side. High contrast, low-key exposure, natural material colour. No characters, no text."
+    },
+    {
+      "id": "shot",
+      "label": "4 · Shot (this Studio)",
+      "kind": "video",
+      "locks": [
+        "realism",
+        "lens",
+        "lighting",
+        "shadow_side"
+      ],
+      "tips": [
+        "The keyframe is the look. Build it on Image with the plates first, then animate it here.",
+        "Busy scenes: fewer words. A two-hander on a master frame can carry more detail.",
+        "Keep it under the token limit; Wan ignores anything past about 512 tokens."
+      ],
+      "fields": [
+        {
+          "id": "who",
+          "label": "Who",
+          "placeholder": "e.g. the man in the leather coat",
+          "default": "the subject"
+        },
+        {
+          "id": "action",
+          "label": "What happens",
+          "placeholder": "e.g. turns slowly toward the door as it creaks open",
+          "default": "moves naturally"
+        },
+        {
+          "id": "focus",
+          "label": "Focus",
+          "placeholder": "e.g. rack focus from his hand to his eyes",
+          "default": "focus stays on the subject's eyes"
+        }
+      ],
+      "template": "{who} {action}. {focus}. Natural, weighty, real-world motion; breathing and small micro-movements; hair and clothing move with real physics."
+    },
+    {
+      "id": "seedance",
+      "label": "5 · Seedance prompt (copy to Higgsfield)",
+      "kind": "video",
+      "copy_only": true,
+      "locks": [
+        "lens",
+        "lighting",
+        "shadow_side"
+      ],
+      "tips": [
+        "For when a shot needs to look like Higgsfield: build the plates here, then attach them in Higgsfield in this order.",
+        "Each reference gets ONE scoped line: what to take and what NOT to take.",
+        "You don't have to use a whole frame. Take a slice: just the blocking, just the light, just the lens."
+      ],
+      "fields": [
+        {
+          "id": "char",
+          "label": "@Image1 character",
+          "placeholder": "e.g. Marco",
+          "default": "the character"
+        },
+        {
+          "id": "action",
+          "label": "What happens",
+          "placeholder": "e.g. Marco steps out the back door and lights a cigarette, watching the street",
+          "default": "the action"
+        },
+        {
+          "id": "camera",
+          "label": "Camera",
+          "placeholder": "e.g. slow push in at chest height, rack focus from the lighter to his eyes",
+          "default": "a slow, motivated camera move"
+        }
+      ],
+      "template": "@Image1 - {char}: face and costume identical throughout. @Image2 - location plate: set design and lens character only; framing is free. @Image3 - lighting plate: light direction, colour and contrast only; do not copy its composition, framing or set. {action}. {camera}."
+    }
+  ],
+  "fixes": [
+    {
+      "id": "plastic",
+      "problem": "Skin looks plastic, waxy or airbrushed",
+      "fix": "Turn on the Realism lock. Remake the keyframe instead of editing it (every chained edit softens skin). Use a photoreal stills model for text-only stills (see docs/PHOTOREAL.md).",
+      "add": "True-to-life skin with visible pores, fine texture and natural imperfections."
+    },
+    {
+      "id": "sharp",
+      "problem": "Everything is sharp, no depth",
+      "fix": "Name a focus point, put the camera 1 to 3 m from it, and say the lens is wide open.",
+      "add": "Focus locked on one named point, camera 2 m from it, lens wide open; foreground and background melt into soft blur."
+    },
+    {
+      "id": "round_bokeh",
+      "problem": "Bokeh is round",
+      "fix": "Write elongated vertical oval highlights and name what they sit on.",
+      "add": "Anamorphic bokeh with elongated vertical oval highlights on the distant lights."
+    },
+    {
+      "id": "flare",
+      "problem": "Flare blows out the frame",
+      "fix": "One source only, say restrained, and make the source less bright.",
+      "add": "One restrained horizontal streak flare off a single dim source."
+    },
+    {
+      "id": "fisheye",
+      "problem": "Fisheye look",
+      "fix": "Add rectilinear and drop to 35mm.",
+      "add": "Rectilinear 35mm perspective, straight lines stay straight."
+    },
+    {
+      "id": "stretched",
+      "problem": "Stretched face",
+      "fix": "A person was put on 24mm. Switch the shot to 50mm or 85mm framing.",
+      "add": "Face framed like a portrait lens at a natural distance, no wide-angle distortion."
+    },
+    {
+      "id": "flat",
+      "problem": "Shots go flat or evenly lit",
+      "fix": "The lighting lock is missing or too soft. Name the key direction and the deep shadow side. Still flat? Add the Shadow side block, and make sure the lighting plate was shot from the shadow side.",
+      "add": "Hard directional key light, deep shadow on one side of the face."
+    },
+    {
+      "id": "warm_drift",
+      "problem": "Light drifts warm between shots",
+      "fix": "Add a NEVER line to the lighting lock.",
+      "add": "Never warm sunset light."
+    },
+    {
+      "id": "crushed",
+      "problem": "Faces crushed to black",
+      "fix": "Keep the shadow side but ask for texture in the shadows and a gentle bounce.",
+      "add": "Shadows hold texture, faces readable, gentle bounce on the shadow side."
+    },
+    {
+      "id": "mush",
+      "problem": "Soft or splotchy asset",
+      "fix": "Too many chained edits. Go back to the earliest clean generation and work from that.",
+      "add": ""
+    },
+    {
+      "id": "logo",
+      "problem": "A brand or logo appears",
+      "fix": "A product or brand name crept into the prompt. Replace it with a description of the look.",
+      "add": "No text, no logos, no brand marks."
+    },
+    {
+      "id": "slowmo",
+      "problem": "Motion is slow-motion, floaty or barely moves",
+      "fix": "A known side effect of the 4-step speed LoRA. Pick Pace: real time, describe the action with strong verbs, and see docs/PHOTOREAL.md for the 3-pass sampler setup.",
+      "add": "Everything moves at natural, real-time speed with weight and momentum."
+    },
+    {
+      "id": "ai_motion",
+      "problem": "Motion looks smooth and synthetic (the 'AI' feel)",
+      "fix": "Turn on Film finish (grain). Use Camera feel: handheld. Ask for small imperfect micro-movements. Raise the frame rate in post (docs/PHOTOREAL.md).",
+      "add": "Slight natural handheld drift, small imperfect micro-movements, breathing."
+    }
+  ]
+}

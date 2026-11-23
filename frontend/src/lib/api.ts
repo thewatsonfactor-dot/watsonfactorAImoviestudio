@@ -28,7 +28,7 @@ export interface Job {
   project: string; prompt: string; negative: string | null; preset: string; length: string; seed: number;
   width: number; height: number; frames: number; steps: number; split: number; cfg: number; shift: number;
   input_path: string; output_path: string | null; error: string | null; error_detail: string | null;
-  render_seconds: number | null; favorite: boolean; tags: string[]; queue_pos: number | null; parent_id: string | null;
+  render_seconds: number | null; favorite: boolean; tags: string[]; queue_pos: number | null; parent_id: string | null; finish?: string;
   video_url: string | null; thumb_url: string | null; input_url: string | null; file_exists: boolean;
   live: Live | null;
 }
@@ -44,6 +44,50 @@ export interface Presets {
   presets: Record<string, PresetDef>;
   image: { sizes: Record<string, [number, number]>; steps: number; cfg: number; shift: number; max_refs: number; note: string; avg_seconds: number | null };
   negative_default: string;
+  finishes?: Record<string, { label: string; note: string }>;
+}
+
+// ---- LENS: stage templates + per-project look locks (studio/config/lens.json)
+export interface LensField { id: string; label: string; placeholder?: string; default: string; options?: string[] }
+export interface LensStage {
+  id: string; label: string; kind: "image" | "video"; aspect?: string; copy_only?: boolean;
+  locks: ("realism" | "lens" | "lighting" | "shadow_side")[]; tips: string[]; fields: LensField[]; template: string;
+}
+export interface LensFix { id: string; problem: string; fix: string; add: string }
+export interface LensLocks {
+  realism_on?: boolean; lens_on?: boolean; lens_text?: string; lighting_on?: boolean; lighting_text?: string;
+  shadow_on?: boolean; finish?: string;
+}
+export interface Lens {
+  locks: { realism: string; realism_video: string; lens: string; shadow_side: string; lighting_example: string };
+  lock_help: Record<string, string>;
+  stages: LensStage[]; fixes: LensFix[];
+  projects: Record<string, LensLocks>;
+}
+export const LOCK_DEFAULTS: Required<Omit<LensLocks, "lens_text" | "lighting_text" | "finish">> = {
+  realism_on: true, lens_on: false, lighting_on: false, shadow_on: false,
+};
+
+/** Fill a stage template: each {field} takes what was typed, or the field's default. */
+export function fillTemplate(stage: LensStage, values: Record<string, string>): string {
+  return stage.template.replace(/\{(\w+)\}/g, (_, id: string) => {
+    const f = stage.fields.find(x => x.id === id);
+    return (values[id] || "").trim() || f?.default || "";
+  }).replace(/\s+/g, " ").trim();
+}
+
+/** The lock text appended to every prompt, in a fixed order: realism, lens, lighting, shadow side.
+ *  With a stage picked, only the locks that stage allows apply (character sheets stay evenly lit). */
+export function lockText(lens: Lens | null, locks: LensLocks, kind: "image" | "video", stage?: LensStage | null): string {
+  if (!lens) return "";
+  const allowed = (k: string) => !stage || (stage.locks as string[]).includes(k);
+  const l = { ...LOCK_DEFAULTS, ...locks };
+  const out: string[] = [];
+  if (l.realism_on && allowed("realism")) out.push(kind === "video" ? lens.locks.realism_video : lens.locks.realism);
+  if (l.lens_on && allowed("lens")) out.push((locks.lens_text || "").trim() || lens.locks.lens);
+  if (l.lighting_on && allowed("lighting") && (locks.lighting_text || "").trim()) out.push(locks.lighting_text!.trim());
+  if (l.shadow_on && allowed("shadow_side")) out.push(lens.locks.shadow_side);
+  return out.join(" ");
 }
 
 export interface Forecast {
@@ -116,7 +160,7 @@ export const api = {
   download: (id: string) => req<unknown>("POST", `/api/models/${id}/download`),
   upload: (file: File) => { const f = new FormData(); f.append("file", file); return req<Upload>("POST", "/api/upload", f); },
   createJob: (body: Record<string, unknown>) => req<Job>("POST", "/api/jobs", body),
-  createImage: (body: { prompt: string; refs: string[]; aspect?: string; project?: string; seed?: number | null }) =>
+  createImage: (body: { prompt: string; refs: string[]; aspect?: string; project?: string; seed?: number | null; negative?: string }) =>
     req<Job>("POST", "/api/images", body),
   toKeyframe: (id: string) => req<Upload>("POST", `/api/library/${id}/to-keyframe`),
   jobs: (scope = "active") => req<Job[]>("GET", `/api/jobs?scope=${scope}`),
@@ -137,6 +181,8 @@ export const api = {
     req<PromptLibrary>("POST", "/api/prompt-library/blocks", b),
   deleteBlock: (id: string) => req<PromptLibrary>("DELETE", `/api/prompt-library/blocks/${id}`),
   rescan: () => req<{ added: number }>("POST", "/api/library/rescan"),
+  lens: () => req<Lens>("GET", "/api/lens"),
+  saveLens: (project: string, locks: LensLocks) => req<Lens>("PUT", `/api/lens/projects/${encodeURIComponent(project)}`, locks),
 };
 
 /** Rough UMT5 token estimate (English sentencepiece ≈ 1.35 tokens/word). */
@@ -184,5 +230,5 @@ export function imageDraftFrom(j: Job) {
 
 export function orientationOf(w: number, h: number): string {
   const r = w / Math.max(h, 1);
-  return r > 1.15 ? "landscape" : r < 0.87 ? "portrait" : "square";
+  return r >= 2 ? "scope" : r > 1.15 ? "landscape" : r < 0.87 ? "portrait" : "square";
 }

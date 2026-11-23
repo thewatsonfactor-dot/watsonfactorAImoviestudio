@@ -9,8 +9,8 @@
                  "note": "4 Standard-size segments chained end to end and stitched into one clip. Each segment is the same proven size as Standard, so this is about time, not new memory risk — but the Mac doesn't release memory between back-to-back renders, so expect roughly 4x a Standard render's time. Not available with Final yet." }
   },
   "tiers": {
-    "480": { "landscape": [832, 480], "portrait": [480, 832], "square": [640, 640] },
-    "720": { "landscape": [1280, 720], "portrait": [720, 1280], "square": [960, 960] }
+    "480": { "landscape": [832, 480], "portrait": [480, 832], "square": [640, 640], "scope": [960, 400] },
+    "720": { "landscape": [1280, 720], "portrait": [720, 1280], "square": [960, 960], "scope": [1440, 608] }
   },
   "presets": {
     "draft": {
@@ -29,6 +29,10 @@
       "experimental": true
     }
   },
+  "finishes": {
+    "none": { "label": "Clean", "note": "The render exactly as the engine made it." },
+    "film": { "label": "Film grain", "note": "Adds organic 35mm-style grain over the finished clip (ffmpeg, a few seconds). Breaks up the too-clean digital look. The ungrained original is kept in .raw/." }
+  },
   "memory_profile": {
     "machine": "Mac Studio M4 Max, 36 GB",
     "proven_ok_tokens": 32760,
@@ -36,9 +40,9 @@
     "note": "Latent tokens = (w/16)*(h/16)*((frames-1)/4+1). 832x480x81 (32,760) rendered fine on Oct 17 2026; 1280x720x81 (75,600) ran out of GPU memory and came out blank. Job history moves both limits."
   },
   "image": {
-    "sizes": { "landscape": [1664, 960], "portrait": [960, 1664], "square": [1328, 1328] },
+    "sizes": { "landscape": [1664, 960], "portrait": [960, 1664], "square": [1328, 1328], "scope": [1920, 800] },
     "steps": 4, "cfg": 1.0, "shift": 3.1, "max_refs": 3,
-    "note": "Qwen-Image-Edit-2511 with the 4-step Lightning LoRA. Landscape and portrait are exactly 2x the Standard video size (832x480), so a still drops straight into Create without being stretched; square is Qwen's native 1328."
+    "note": "Qwen-Image-Edit-2511 with the 4-step Lightning LoRA. Landscape and portrait are exactly 2x the Standard video size (832x480), so a still drops straight into Create without being stretched; square is Qwen's native 1328. Scope (2.39:1, the anamorphic widescreen frame LENS plates use) is 2x the 960x400 scope video size; 960x400 has fewer latent tokens per frame than 832x480, so it sits inside the proven memory size."
   },
   "negative_default":"blurry, low quality, distorted face, extra limbs, warped hands, flicker, jpeg artifacts, watermark, text, subtitles, static frame"
 }

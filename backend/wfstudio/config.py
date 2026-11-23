@@ -133,6 +133,37 @@ def custom_blocks() -> list[dict[str, Any]]:
     return list(_read(PROMPT_LIBRARY_LOCAL).get("blocks", []))
 
 
+LENS = CONFIG_DIR / "lens.json"
+LENS_LOCAL = CONFIG_DIR / "lens.local.json"  # per-project look locks (git-ignored)
+
+LOCK_KEYS = {
+    "realism_on": bool, "lens_on": bool, "lens_text": str, "lighting_on": bool, "lighting_text": str,
+    "shadow_on": bool, "finish": str,
+}
+
+
+def lens() -> dict[str, Any]:
+    """LENS stage templates, default lock text and failure fixes, plus each project's saved locks."""
+    out = _read(LENS)
+    out["projects"] = _read(LENS_LOCAL).get("projects", {})
+    return out
+
+
+def save_lens_project(name: str, locks: dict[str, Any]) -> dict[str, Any]:
+    """Save one project's look locks. Unknown keys are dropped; text is capped so a lock can't
+    swallow the whole prompt budget."""
+    clean: dict[str, Any] = {}
+    for k, typ in LOCK_KEYS.items():
+        if k in locks and isinstance(locks[k], typ):
+            clean[k] = locks[k][:1200] if typ is str else locks[k]
+    with _lock:
+        data = _read(LENS_LOCAL)
+        projects = data.setdefault("projects", {})
+        projects[name] = {**projects.get(name, {}), **clean}
+        LENS_LOCAL.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+    return lens()
+
+
 def ensure_dirs() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)

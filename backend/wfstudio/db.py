@@ -19,7 +19,7 @@ JOB_COLUMNS = [
     "frames", "steps", "split", "cfg", "shift", "input_path", "prompt_id",
     "output_path", "thumb_path", "sidecar_path", "error", "error_detail",
     "render_seconds", "favorite", "tags", "queue_pos", "parent_id",
-    "chain_id", "chain_index", "chain_total", "hidden", "kind", "refs",
+    "chain_id", "chain_index", "chain_total", "hidden", "kind", "refs", "finish",
 ]
 
 SCHEMA = """
@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     chain_total INTEGER,  -- segment count the chain was built for
     hidden INTEGER DEFAULT 0, -- chain segments hide once stitched; the combined clip stays visible
     kind TEXT DEFAULT 'video', -- video (Wan, Create screen) | image (Qwen, Image screen)
-    refs TEXT DEFAULT '[]'     -- image jobs: JSON list of reference-photo paths (0-3)
+    refs TEXT DEFAULT '[]',    -- image jobs: JSON list of reference-photo paths (0-3)
+    finish TEXT DEFAULT ''     -- post pass on the finished clip: '' (clean) | film (35mm grain)
 );
 CREATE INDEX IF NOT EXISTS jobs_status ON jobs(status);
 CREATE TABLE IF NOT EXISTS projects (name TEXT PRIMARY KEY, created_at REAL);
@@ -57,7 +58,8 @@ def _migrate(c: sqlite3.Connection) -> None:
     existing = {row[1] for row in c.execute("PRAGMA table_info(jobs)").fetchall()}
     for col, decl in (("chain_id", "TEXT"), ("chain_index", "INTEGER"),
                       ("chain_total", "INTEGER"), ("hidden", "INTEGER DEFAULT 0"),
-                      ("kind", "TEXT DEFAULT 'video'"), ("refs", "TEXT DEFAULT '[]'")):
+                      ("kind", "TEXT DEFAULT 'video'"), ("refs", "TEXT DEFAULT '[]'"),
+                      ("finish", "TEXT DEFAULT ''")):
         if col not in existing:
             c.execute(f"ALTER TABLE jobs ADD COLUMN {col} {decl}")
 
